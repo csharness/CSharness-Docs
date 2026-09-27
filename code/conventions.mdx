@@ -1,0 +1,209 @@
+---
+title: "API Conventions and Standards Used Across Google"
+sidebarTitle: "Conventions"
+description: "Learn the consistent naming conventions, date formats, ID formats, HTTP status codes, and error structure used throughout the Google API."
+---
+
+Google's API is designed to behave predictably no matter which endpoint you call. A consistent set of conventions governs how URLs are formed, how fields are named, how errors are reported, and which HTTP status codes mean what. Reading this page once will save you debugging time across every integration you build.
+
+## Base URL and Versioning
+
+All API requests target a versioned base URL. The version identifier is a path segment immediately after the host:
+
+```
+https://api.google.example/v1/<resource-path>
+```
+
+Backwards-incompatible changes are introduced in a new version (`/v2`, `/v3`, etc.). Backwards-compatible additions — new optional request fields, new response fields, new endpoints — are added to the current version without a bump. Pin your integration to a specific version and monitor the [changelog](/support/changelog) for deprecation notices before upgrading.
+
+## Resource IDs
+
+Every resource has a string UUID identifier. IDs are prefixed with a short resource-type slug followed by an underscore, making it easy to tell resource types apart at a glance:
+
+```
+res_01HXZ9KQMB3VFPNQY7E2A8T6C
+doc_01HXZ9KQMB4WFPNQY7E2A8T6D
+wsp_01HXZ9KQMB5XFPNQY7E2A8T6E
+```
+
+IDs are **case-sensitive strings**. Never treat them as integers or parse internal structure from them — the format may evolve. Always store and compare them as opaque strings.
+
+<Note>
+  IDs use the [ULID](https://github.com/ulid/spec) format internally, which means they are roughly sortable by creation time — but rely on the `created_at` timestamp field for precise chronological ordering.
+</Note>
+
+## Timestamps
+
+All date and time values are returned as **ISO 8601 strings in UTC**:
+
+```
+2025-06-01T12:00:00Z
+```
+
+This applies to `created_at`, `updated_at`, `deleted_at`, and any other temporal fields across the entire API. When sending timestamps in request bodies or filter parameters, use the same format. The API rejects requests with timestamps in other formats.
+
+<Tip>
+  Parse timestamps with a library that understands ISO 8601 and timezone offsets (e.g. `date-fns`, `Temporal`, `datetime`, `time.Parse`). Do not split on `T` and `Z` manually — it breaks for timestamps that include milliseconds or non-UTC offsets.
+</Tip>
+
+## Field Naming
+
+JSON field names use **snake_case** throughout the API — no camelCase, no kebab-case:
+
+```json
+{
+  "id": "doc_01HXZ9KQMB3V",
+  "created_at": "2025-06-01T12:00:00Z",
+  "updated_at": "2025-06-15T09:30:00Z",
+  "workspace_id": "wsp_01HXZ9KQMB5X",
+  "is_published": true
+}
+```
+
+Boolean fields follow the `is_` or `has_` prefix convention (`is_active`, `has_children`). Array fields use the plural form of the noun (`tags`, `members`, `linked_resources`).
+
+## HTTP Status Codes
+
+Google uses a standard, limited set of HTTP status codes. Knowing what each one means helps you write the right error-handling logic the first time.
+
+| Status | Name | When you see it |
+|---|---|---|
+| `200` | OK | The request succeeded. The response body contains the requested data. |
+| `201` | Created | A new resource was created (typically in response to a `POST`). |
+| `204` | No Content | The request succeeded and there is no response body (common for `DELETE`). |
+| `400` | Bad Request | The request was malformed — missing required fields, invalid JSON, etc. |
+| `401` | Unauthorized | No valid API token was provided, or the token has expired. |
+| `403` | Forbidden | The token is valid but does not have permission to perform the action. |
+| `404` | Not Found | The requested resource does not exist or is not visible to this token. |
+| `422` | Unprocessable Entity | The request was well-formed but failed validation (e.g. a field value out of range). |
+| `429` | Too Many Requests | You have exceeded the rate limit. Check the `Retry-After` header. |
+| `500` | Internal Server Error | Something went wrong on Google's side. Retry with exponential backoff. |
+
+<Warning>
+  A `404` can mean either "this resource truly does not exist" or "you don't have permission to see it." The API intentionally conflates the two to avoid leaking the existence of private resources. If you believe a resource exists but you are receiving `404`, verify your token's workspace scope.
+</Warning>
+
+## Standard Error Object
+
+When a request results in a `4xx` or `5xx` response, the body contains a structured error object inside the standard response envelope. The `errors` array always contains at least one item describing what went wrong:
+
+```json
+{
+  "data": null,
+  "meta": {
+    "request_id": "req_01HXZ9KQMBFG"
+  },
+  "errors": [
+    {
+      "code": "not_found",
+      "message": "The requested document could not be found.",
+      "details": [
+        {
+          "field": null,
+          "reason": "Resource doc_01HXZ9KQMB3V does not exist in workspace wsp_01HXZ9KQMB5X"
+        }
+      ]
+    }
+  ]
+}
+```
+
+<Tabs>
+  <Tab title="Validation Error (422)">
+    ```json
+    {
+      "data": null,
+      "meta": { "request_id": "req_01HY3ABCDEFG" },
+      "errors": [
+        {
+          "code": "validation_error",
+          "message": "One or more fields failed validation.",
+          "details": [
+            {
+              "field": "title",
+              "reason": "Title must be between 1 and 255 characters."
+            },
+            {
+              "field": "visibility",
+              "reason": "Must be one of: public, private, workspace."
+            }
+          ]
+        }
+      ]
+    }
+    ```
+  </Tab>
+  <Tab title="Auth Error (401)">
+    ```json
+    {
+      "data": null,
+      "meta": { "request_id": "req_01HY3ABCDEFH" },
+      "errors": [
+        {
+          "code": "unauthorized",
+          "message": "No valid authentication token was provided.",
+          "details": []
+        }
+      ]
+    }
+    ```
+  </Tab>
+  <Tab title="Rate Limit Error (429)">
+    ```json
+    {
+      "data": null,
+      "meta": { "request_id": "req_01HY3ABCDEFI" },
+      "errors": [
+        {
+          "code": "rate_limit_exceeded",
+          "message": "You have exceeded the request rate limit. Please retry after the indicated delay.",
+          "details": [
+            {
+              "field": null,
+              "reason": "Limit: 1000 requests/minute. Reset in 42 seconds."
+            }
+          ]
+        }
+      ]
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Error Object Fields
+
+<ResponseField name="code" type="string" required>
+  A machine-readable slug identifying the error type. Use this in your error-handling logic — never parse the `message` string. Common values: `not_found`, `unauthorized`, `forbidden`, `validation_error`, `rate_limit_exceeded`, `internal_error`.
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  A human-readable description of the error, suitable for logging or displaying in developer tooling. This string may change between releases; do not match on it programmatically.
+</ResponseField>
+
+<ResponseField name="details" type="array">
+  An array of detail objects providing field-level context. Especially useful for `422` validation errors, where each entry identifies the offending field and the reason it failed. May be an empty array for errors that do not have field-level context.
+</ResponseField>
+
+<ResponseField name="details[].field" type="string | null">
+  The request field that triggered this detail entry, or `null` when the error is not tied to a specific field.
+</ResponseField>
+
+<ResponseField name="details[].reason" type="string">
+  A human-readable explanation of why the field failed or the context for a non-field error detail.
+</ResponseField>
+
+## Request Headers
+
+Include these headers on every API request:
+
+```bash
+Authorization: Bearer <your_api_token>
+Content-Type: application/json
+Accept: application/json
+```
+
+The `Content-Type` header is required on requests that include a body (`POST`, `PATCH`, `PUT`). The `Accept` header is optional but recommended — it signals that your client understands JSON responses.
+
+<Info>
+  All requests and responses are UTF-8 encoded. The API does not support other character encodings. Ensure your HTTP client is not adding a different charset to the `Content-Type` header.
+</Info>

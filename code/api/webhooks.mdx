@@ -1,0 +1,276 @@
+---
+title: "Receive Real-Time Events with Google Webhooks"
+sidebarTitle: "Webhooks"
+description: "Configure webhook endpoints to receive real-time event notifications from Google when resources are created, updated, or deleted."
+---
+
+Webhooks let Google push event notifications to your server the moment something changes — no polling required. Instead of repeatedly asking "has anything changed?", you register an HTTPS endpoint and Google calls it whenever a subscribed event occurs. This makes webhooks ideal for triggering workflows, syncing external systems, or sending notifications in near real-time.
+
+<CardGroup cols={2}>
+  <Card title="Use webhooks when…" icon="bolt">
+    You need immediate notification of changes, such as triggering a build when a resource is published or alerting a Slack channel when a member joins.
+  </Card>
+  <Card title="Use polling when…" icon="clock">
+    You need to periodically reconcile state, work in environments that can't accept inbound connections, or query historical data in bulk.
+  </Card>
+</CardGroup>
+
+---
+
+## Supported Events
+
+Subscribe to one or more of the following events when registering your webhook:
+
+| Event | Fired when… |
+|---|---|
+| `resource.created` | A new resource is created in any subscribed project. |
+| `resource.updated` | An existing resource's fields, name, or status changes. |
+| `resource.deleted` | A resource is permanently deleted. |
+| `project.created` | A new project is created in your workspace. |
+| `project.deleted` | A project is permanently deleted. |
+| `member.added` | A user is added to your workspace or a project. |
+| `member.removed` | A user is removed from your workspace or a project. |
+
+---
+
+## Registering a Webhook
+
+Send a `POST` request to `/v1/webhooks` with the URL you want Google to call, the events you want to subscribe to, and an optional secret for signature verification.
+
+**`POST /v1/webhooks`**
+
+<ParamField body="url" type="string" required>
+  The HTTPS endpoint Google will send event payloads to. Must be publicly reachable and use `https://`.
+</ParamField>
+
+<ParamField body="events" type="string[]" required>
+  Array of event names to subscribe to. Use `["*"]` to subscribe to all current and future events.
+</ParamField>
+
+<ParamField body="secret" type="string">
+  A secret string used to sign payloads with HMAC-SHA256. Store this securely — Google will not return it after registration. Strongly recommended for production endpoints.
+</ParamField>
+
+<CodeGroup>
+```bash title="Register a webhook"
+curl -X POST https://api.google.example/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://yourapp.example/webhooks/google",
+    "events": ["resource.created", "resource.updated", "resource.deleted"],
+    "secret": "whsec_your_random_secret_here"
+  }'
+```
+
+```json title="Response — 201 Created"
+{
+  "id": "wh_01abc",
+  "url": "https://yourapp.example/webhooks/google",
+  "events": ["resource.created", "resource.updated", "resource.deleted"],
+  "active": true,
+  "created_at": "2024-05-12T18:00:00Z"
+}
+```
+</CodeGroup>
+
+<Note>
+  Google does not store or re-display your webhook secret after the registration response. Save it to a secure secrets manager immediately.
+</Note>
+
+---
+
+## Webhook Payload Structure
+
+When a subscribed event fires, Google sends an HTTP `POST` request to your endpoint with a JSON body:
+
+```json title="Example webhook payload — resource.created"
+{
+  "id": "evt_01xyz",
+  "event": "resource.created",
+  "created_at": "2024-05-12T18:05:22Z",
+  "data": {
+    "id": "res_01hy",
+    "name": "Authentication Guide",
+    "type": "article",
+    "project_id": "proj_abc",
+    "fields": {
+      "status": "draft",
+      "author": "Jane Doe"
+    },
+    "created_at": "2024-05-12T18:05:22Z",
+    "updated_at": "2024-05-12T18:05:22Z"
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Unique event ID. Useful for deduplication. |
+| `event` | string | The event name, for example `resource.created`. |
+| `created_at` | string | ISO 8601 timestamp of when the event was generated. |
+| `data` | object | The full object that changed. The shape matches the corresponding REST resource. |
+
+---
+
+## Verifying Signatures
+
+Anyone who knows your endpoint URL could send fake payloads to it. Signature verification ensures that every payload you process genuinely came from Google.
+
+When you register a webhook with a `secret`, Google computes an HMAC-SHA256 signature over the raw request body using your secret and includes it in the `X-Google-Signature` header as `sha256=<hex_digest>`.
+
+<Steps>
+  <Step title="Read the signature header">
+    Extract the value of the `X-Google-Signature` header from the incoming request.
+  </Step>
+  <Step title="Compute the expected signature">
+    Compute `HMAC-SHA256(secret, rawBody)` using the raw, unparsed request body bytes and your webhook secret.
+  </Step>
+  <Step title="Compare using a constant-time function">
+    Compare your computed digest with the header value using a constant-time comparison to prevent timing attacks.
+  </Step>
+  <Step title="Reject mismatches">
+    If the signatures don't match, return `400 Bad Request` and do not process the payload.
+  </Step>
+</Steps>
+
+```javascript title="Signature verification in Node.js"
+const crypto = require("crypto");
+
+function verifyWebhookSignature(req, secret) {
+  const signatureHeader = req.headers["x-google-signature"];
+
+  if (!signatureHeader) {
+    throw new Error("Missing X-Google-Signature header");
+  }
+
+  // req.rawBody must be the raw Buffer — do NOT use JSON.parse first
+  const expectedSignature =
+    "sha256=" +
+    crypto
+      .createHmac("sha256", secret)
+      .update(req.rawBody)
+      .digest("hex");
+
+  const trusted = Buffer.from(expectedSignature, "utf8");
+  const received = Buffer.from(signatureHeader, "utf8");
+
+  // Use timingSafeEqual to prevent timing attacks
+  if (
+    trusted.length !== received.length ||
+    !crypto.timingSafeEqual(trusted, received)
+  ) {
+    throw new Error("Webhook signature verification failed");
+  }
+
+  return true;
+}
+
+// Express.js example
+app.post(
+  "/webhooks/google",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    try {
+      verifyWebhookSignature(req, process.env.WEBHOOK_SECRET);
+    } catch (err) {
+      return res.status(400).send("Invalid signature");
+    }
+
+    const payload = JSON.parse(req.rawBody);
+    console.log("Received event:", payload.event);
+
+    // Acknowledge immediately, process asynchronously
+    res.status(200).json({ received: true });
+  }
+);
+```
+
+<Warning>
+  Always use `express.raw()` (or the equivalent in your framework) to access the raw body bytes. Parsing the body as JSON first and re-serializing it will produce a different byte sequence and cause every signature check to fail.
+</Warning>
+
+---
+
+## Responding to Webhooks
+
+Google considers a delivery successful when your endpoint returns any HTTP `2xx` status code within **10 seconds**. Follow these guidelines:
+
+<Accordion title="Return 2xx immediately, process asynchronously">
+  Acknowledge the webhook as soon as you've verified the signature. Enqueue the payload to a background job or message queue for processing. This prevents timeouts caused by slow database writes, downstream API calls, or heavy computation.
+</Accordion>
+
+<Accordion title="Implement idempotency using the event ID">
+  Google may deliver the same event more than once, especially during retries. Use the `id` field to deduplicate events and ensure processing a duplicate has no side effects.
+</Accordion>
+
+<Accordion title="Do not return 5xx unless you want a retry">
+  Return `5xx` only if you genuinely want Google to retry the delivery. Returning `5xx` for events you choose to ignore will cause unnecessary retries.
+</Accordion>
+
+---
+
+## Retry Policy
+
+If your endpoint does not return a `2xx` within 10 seconds, or returns a `5xx` status, Google retries the delivery automatically:
+
+| Attempt | Delay after previous attempt |
+|---|---|
+| 1st retry | 5 seconds |
+| 2nd retry | 30 seconds |
+| 3rd retry | 5 minutes |
+
+After three failed retries, the delivery is marked as **failed** and no further attempts are made for that event. You can view failed deliveries in **Settings → Webhooks → Delivery Logs** and manually replay them.
+
+<Tip>
+  If your endpoint is going down for planned maintenance, temporarily disable the webhook in the dashboard rather than letting deliveries fail and exhaust retries.
+</Tip>
+
+---
+
+## Listing Webhooks
+
+Retrieve all registered webhooks for your workspace:
+
+**`GET /v1/webhooks`**
+
+<CodeGroup>
+```bash title="List webhooks"
+curl -X GET https://api.google.example/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```json title="Response"
+{
+  "data": [
+    {
+      "id": "wh_01abc",
+      "url": "https://yourapp.example/webhooks/google",
+      "events": ["resource.created", "resource.updated", "resource.deleted"],
+      "active": true,
+      "created_at": "2024-05-12T18:00:00Z"
+    }
+  ],
+  "total": 1
+}
+```
+</CodeGroup>
+
+---
+
+## Deleting a Webhook
+
+Remove a webhook endpoint. Google will stop sending events to it immediately.
+
+**`DELETE /v1/webhooks/:id`**
+
+<CodeGroup>
+```bash title="Delete a webhook"
+curl -X DELETE https://api.google.example/v1/webhooks/wh_01abc \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```json title="Response — 204 No Content"
+{}
+```
+</CodeGroup>

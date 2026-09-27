@@ -1,13 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "Google",
+  "projectType": "saas",
+  "projectName": "Google",
+  "projectDescription": "A comprehensive knowledge base and code documentation platform for end-users and developers.",
   "theme": "maple",
-  "colors": {
-    "primary": "#ef7025",
-    "light": "#eec9bc",
-    "dark": "#4fa1ab"
-  },
-  "favicon": "/favicon.svg",
+  "primaryColor": "#ef7025",
+  "lightColor": "#eec9bc",
+  "darkColor": "#4fa1ab",
   "navigation": {
     "tabs": [
       {
@@ -90,14 +88,19 @@
       }
     ]
   },
-  "navbar": {
-    "primary": {
-      "type": "button",
-      "label": "Get Started",
-      "href": "/quickstart"
-    }
-  },
-  "footer": {
-    "socials": {}
-  }
+  "keyFeatures": [
+    "Comprehensive knowledge base for end-users",
+    "Developer-facing code documentation and API reference",
+    "Authentication and permissions management",
+    "Webhook and integration support",
+    "SDK and client library documentation",
+    "Searchable, structured help and troubleshooting content"
+  ],
+  "publicApiSurface": [
+    "REST API endpoints",
+    "Authentication (API keys, OAuth)",
+    "Webhooks",
+    "SDK client libraries",
+    "Configuration and environment settings"
+  ]
 }

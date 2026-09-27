@@ -1,0 +1,121 @@
+---
+title: Frequently Asked Questions About Google
+sidebarTitle: FAQ
+description: Find answers to the most common questions about Google — billing, accounts, API limits, data export, and team management.
+---
+
+Whether you're just getting started or managing a growing team, this page collects the questions we hear most often. Browse by category to find the answer you need — and if something isn't covered here, reach out through our [support portal](/support/troubleshooting).
+
+## Account & Billing
+
+<Accordion title="How do I change my plan?">
+  Navigate to **Settings → Billing** and click **Change Plan**. You'll see a comparison of all available tiers. Upgrades take effect immediately and your billing is prorated for the remainder of the current cycle. Downgrades take effect at the start of your next billing period — you retain full access to your current features until then.
+</Accordion>
+
+<Accordion title="How do I cancel my subscription?">
+  Go to **Settings → Billing → Manage Subscription** and select **Cancel Plan**. Your account stays active until the end of the current billing period. After that, you're moved to the free tier — your data is not deleted, but access to paid features is suspended. If you need a full account deletion, contact support after cancellation.
+</Accordion>
+
+<Accordion title="Is there a free trial?">
+  Yes. Every new account starts with a 14-day free trial of the Pro plan — no credit card required. At the end of the trial you're automatically moved to the free tier unless you add a payment method and choose a paid plan. You can upgrade at any time during the trial without losing any data or configuration.
+</Accordion>
+
+---
+
+## API & Keys
+
+<Accordion title="How many API keys can I create?">
+  The number of API keys you can create depends on your plan:
+
+  | Plan | API Keys |
+  |------|----------|
+  | Free | 2 |
+  | Starter | 10 |
+  | Pro | 50 |
+  | Enterprise | Unlimited |
+
+  Each key is scoped to a single workspace. To create a key, go to **Settings → API Keys → New Key**.
+</Accordion>
+
+<Accordion title="Can I restrict a key to read-only access?">
+  Yes. When creating or editing an API key, expand **Permissions** and select the scopes you want to grant. To create a read-only key, enable only the `read:*` scopes and leave all `write:*` and `delete:*` scopes unchecked. Keys inherit no permissions by default — you must explicitly select at least one scope. See [API Authentication](/code/api/authentication) for the full list of available scopes.
+</Accordion>
+
+<Accordion title="What happens when an API key expires?">
+  Requests made with an expired key return a `401 Unauthorized` response. The key is not automatically deleted — it remains visible in **Settings → API Keys** with an `Expired` badge. You can either extend the expiry date by clicking **Edit** on the key, or rotate it by generating a new key and updating your integration. We send an expiry warning email 7 days before a key expires.
+</Accordion>
+
+---
+
+## Data & Privacy
+
+<Accordion title="Where is my data stored?">
+  By default, all data is stored in Google-managed infrastructure in the **United States (us-east-1)**. Enterprise customers can request data residency in the **European Union (eu-west-1)** or **Asia-Pacific (ap-southeast-1)** regions. Region selection is set at workspace creation time and cannot be changed after the fact. You can verify your workspace region in **Settings → General → Data Region**.
+</Accordion>
+
+<Accordion title="Can I export all my data?">
+  Yes. Go to **Settings → Data Management → Export Workspace** to request a full export. The export includes all documents, knowledge base entries, API configurations, team settings, and audit logs. Exports are packaged as a `.zip` archive containing JSON files. Large workspaces may take up to 30 minutes to prepare — you'll receive an email with a download link once the export is ready. Download links expire after 48 hours. You can also use the [bulk export endpoint](/code/api/endpoints) programmatically.
+</Accordion>
+
+<Accordion title="How long is deleted data retained before permanent removal?">
+  When you delete a document, knowledge base entry, or other resource, it moves to a **soft-deleted** state for **30 days**. During this window you can restore the item from the Trash in **Data Management → Trash**. After 30 days, the data is permanently and irreversibly deleted from all storage systems, including backups. API keys and team member records follow the same 30-day policy. If your plan requires a shorter or longer retention window for compliance reasons, contact our support team.
+</Accordion>
+
+---
+
+## Team & Access
+
+<Accordion title="How do I remove a team member?">
+  Go to **Settings → Team** and find the member you want to remove. Click the **⋯** menu next to their name and select **Remove from Workspace**. The member loses access immediately — any active sessions are invalidated within 60 seconds. Resources they created (documents, integrations, API keys) remain in the workspace and are reassigned to the workspace owner. You can re-invite the same email address at any time.
+</Accordion>
+
+<Accordion title="Can I transfer workspace ownership to another user?">
+  Yes. Go to **Settings → General → Ownership** and click **Transfer Ownership**. Select the new owner from your existing team members — they must already be an Admin. The transfer takes effect immediately. Your role changes to Admin automatically; you are not removed from the workspace. The new owner receives a confirmation email. Note that ownership transfer is irreversible without the new owner initiating another transfer.
+</Accordion>
+
+<Accordion title="What is the difference between Admin and Member roles?">
+  Google has two built-in roles:
+
+  | Capability | Member | Admin |
+  |---|---|---|
+  | Read all content | ✅ | ✅ |
+  | Create & edit content | ✅ | ✅ |
+  | Manage API keys | Own keys only | All keys |
+  | Invite team members | ❌ | ✅ |
+  | Remove team members | ❌ | ✅ |
+  | Manage billing | ❌ | ✅ |
+  | Change workspace settings | ❌ | ✅ |
+  | Transfer ownership | ❌ | ✅ (if owner) |
+
+  Enterprise plans support custom roles with granular permissions. See [Permissions](/configuration/permissions) for details.
+</Accordion>
+
+---
+
+## Limits & Performance
+
+<Accordion title="What are the rate limits for the API?">
+  Rate limits apply per API key and are enforced on a **60-second rolling window**:
+
+  | Plan | Requests / minute |
+  |------|------------------|
+  | Free | 60 |
+  | Starter | 300 |
+  | Pro | 1,000 |
+  | Enterprise | Custom |
+
+  When you exceed the limit, the API returns `429 Too Many Requests` with a `Retry-After` header indicating how many seconds to wait. You can monitor your current usage in **Settings → API Keys** or via the `X-RateLimit-Remaining` response header. See [Rate Limits](/code/advanced/rate-limits) for a full breakdown and best practices.
+</Accordion>
+
+<Accordion title="Is there a file size limit for imports?">
+  Yes. The following limits apply to file imports across all plans:
+
+  | Format | Max File Size | Max Rows / Records |
+  |--------|--------------|-------------------|
+  | CSV | 50 MB | 500,000 rows |
+  | JSON | 100 MB | Unlimited |
+  | Markdown (`.md`, `.mdx`) | 10 MB per file | — |
+  | ZIP archive | 500 MB | — |
+
+  If your import exceeds these limits, split the file into smaller batches or use the [bulk import API endpoint](/code/api/endpoints) which supports streaming uploads. Enterprise customers can request higher limits on a case-by-case basis.
+</Accordion>

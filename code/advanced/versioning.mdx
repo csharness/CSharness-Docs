@@ -1,0 +1,191 @@
+---
+title: "API Versioning: Staying Compatible as Google Evolves"
+sidebarTitle: Versioning
+description: Learn how Google versions its API, what breaking changes mean, how to migrate between versions, and how to stay informed about deprecations.
+---
+
+Google's API evolves continuously — new capabilities are added, existing endpoints are refined, and occasionally older patterns are retired in favour of better ones. To give you control over when and how your integration absorbs those changes, Google uses explicit API versioning. Every request you make targets a specific version, so your application keeps working exactly as you built it, regardless of what ships in a newer version. This page explains the versioning scheme, defines what counts as a breaking change, and walks you through migrating safely when the time comes.
+
+## Versioning Strategy
+
+Google uses **URL path versioning**. The version identifier appears as the first path segment of every API request:
+
+```
+https://api.google.com/{version}/{resource}
+```
+
+For example:
+
+```http title="Versioned API Requests"
+# Current stable version
+GET https://api.google.com/v1/documents
+
+# Beta version (opt-in)
+GET https://api.google.com/v2/documents
+```
+
+This approach means your version choice is explicit and visible in every request. There is no implicit "latest" alias — you always know exactly which contract you have agreed to.
+
+## Current Versions
+
+| Version | Status | Available Since | Notes |
+|---------|--------|-----------------|-------|
+| `v1` | **Stable** (current) | 2023-03-01 | Recommended for all production traffic |
+| `v2` | **Beta** (opt-in) | 2024-09-15 | Feature-complete; may have minor breaking changes before GA |
+
+<Warning>
+  Do not hardcode a version string (e.g. `/v1/`) in your application without a migration plan and a process for monitoring deprecation notices. When v1 is eventually sunset, integrations that cannot change their version string quickly will begin receiving errors.
+</Warning>
+
+## Breaking vs. Non-Breaking Changes
+
+Not every change to the API requires a version bump. Understanding the distinction helps you decide how carefully to read a changelog entry.
+
+### Breaking Changes
+
+Google will **never** introduce the following changes within an existing stable version. They always arrive in a new version:
+
+<Accordion title="Removed fields or endpoints">
+  Deleting a response field or removing an endpoint entirely is always breaking. If your code reads `response.body.legacyField` and that field disappears, your integration fails silently or throws an error.
+</Accordion>
+
+<Accordion title="Changed field types">
+  Changing a field from a string to an integer, or from a flat value to a nested object, breaks any code that assumes the original type.
+</Accordion>
+
+<Accordion title="Renamed endpoints or fields">
+  Renaming `/documents` to `/docs`, or renaming a response key from `created_at` to `createdAt`, breaks code that references the old name.
+</Accordion>
+
+<Accordion title="Changed authentication requirements">
+  Requiring a new OAuth scope on an endpoint that previously worked without it is a breaking change for any integration that has not requested that scope.
+</Accordion>
+
+<Accordion title="Changed error codes or response status codes">
+  If an endpoint previously returned `200` on a partial success and now returns `207`, client code that branches on the status code may behave incorrectly.
+</Accordion>
+
+### Non-Breaking Changes
+
+The following changes can and do occur within a stable version at any time. Your integration should tolerate them gracefully:
+
+- **New optional request parameters** — ignore them if you do not need them.
+- **New response fields** — deserialise into a flexible structure that ignores unknown keys.
+- **New endpoints** — you only call what you use.
+- **New enum values** — handle unknown enum values with a default/fallback case rather than an exhaustive switch.
+- **Increased rate limits** — your existing throttling logic simply has more headroom.
+
+<Tip>
+  When deserialising API responses, use a schema that **ignores unknown fields** rather than one that throws on unexpected keys. This is the single most effective way to make your integration tolerant of non-breaking changes.
+</Tip>
+
+## Deprecation Policy
+
+Google commits to a minimum **six-month deprecation notice** before removing any stable API version or retiring any endpoint within a stable version. Notices are delivered through all of the following channels simultaneously:
+
+<CardGroup cols={2}>
+  <Card title="Email Notification" icon="envelope">
+    An email is sent to all account owners and API contacts on record the moment a deprecation is announced.
+  </Card>
+  <Card title="Dashboard Banner" icon="bell">
+    A persistent banner appears in the Google dashboard for any account whose API traffic includes calls to the deprecated version or endpoint.
+  </Card>
+  <Card title="Response Headers" icon="code">
+    Deprecated endpoints return a `Deprecation` response header with the sunset date, visible in your logs from day one of the notice period.
+  </Card>
+  <Card title="API Changelog" icon="clock-rotate-left">
+    All deprecation notices are published to the API changelog, which you can subscribe to via RSS or email digest.
+  </Card>
+</CardGroup>
+
+```http title="Deprecation Warning Header"
+HTTP/1.1 200 OK
+Deprecation: Sun, 01 Jun 2025 00:00:00 GMT
+Sunset: Mon, 01 Dec 2025 00:00:00 GMT
+Link: <https://api.google.com/v2/documents>; rel="successor-version"
+```
+
+## Sunset Timeline
+
+| Milestone | Date | Detail |
+|---|---|---|
+| v2 Beta launched | 2024-09-15 | Opt-in at `api.google.com/v2` |
+| v1 Deprecation announced | 2025-03-01 | Six-month notice period begins; dashboard banners shown |
+| v2 General Availability | 2025-06-01 | v2 becomes the recommended stable version |
+| v1 Sunset | 2025-09-01 | v1 endpoints return `410 Gone`; all traffic must use v2 |
+
+<Note>
+  Dates are subject to change. The dashboard always shows the authoritative sunset date for your account. Subscribe to the [API changelog](/support/changelog) to receive updates automatically.
+</Note>
+
+## Migrating Between Versions
+
+Migrations are safest when you treat v1 and v2 as two separate integrations running in parallel until you are confident in the new version.
+
+### Side-by-Side Testing
+
+<Steps>
+  <Step title="Inventory your v1 calls">
+    Search your codebase for all references to `/v1/` and list every endpoint your application calls. This becomes your migration checklist.
+  </Step>
+  <Step title="Review the v2 migration guide">
+    Read the [v2 changelog entry](/support/changelog) for a complete diff of every field, endpoint, and behaviour change between v1 and v2.
+  </Step>
+  <Step title="Create a v2 API key (scoped)">
+    In **Settings → API Keys**, create a dedicated key for your v2 testing. Keeping it separate makes it easy to revoke if something goes wrong during testing.
+  </Step>
+  <Step title="Run both versions in parallel">
+    Update a non-production environment to call v2 endpoints while production continues on v1. Compare the responses to identify any schema differences your code needs to handle.
+  </Step>
+  <Step title="Update your response models">
+    Adjust your data models, type definitions, or deserialisers to align with v2 field names and types. Run your test suite against the v2 responses.
+  </Step>
+  <Step title="Promote to production with a feature flag">
+    Gate the v2 code path behind a feature flag. Enable it for a small percentage of traffic first, monitor error rates, then roll out fully.
+  </Step>
+  <Step title="Remove the v1 code path">
+    Once v2 traffic is stable, delete the v1 code paths, rotate the v1 key, and remove the feature flag.
+  </Step>
+</Steps>
+
+### Feature Flag Approach
+
+If a full side-by-side environment is not practical, a feature flag in your API client achieves the same incremental rollout:
+
+```javascript title="apiClient.js"
+const API_VERSION = process.env.GOOGLE_API_VERSION || "v1";
+
+export function buildApiUrl(path) {
+  return `https://api.google.com/${API_VERSION}${path}`;
+}
+
+// Usage — no hardcoded version string in business logic
+const response = await fetch(buildApiUrl("/documents"), {
+  headers: { Authorization: `Bearer ${process.env.GOOGLE_API_KEY}` },
+});
+```
+
+By centralising the version string in a single environment variable, you can switch your entire application from v1 to v2 with a one-line config change and a redeployment — no code changes required.
+
+<Warning>
+  Avoid scattering version strings across multiple files or constants. A search-and-replace migration under deadline pressure is error-prone. Centralise the version in one place from day one.
+</Warning>
+
+## Staying Informed
+
+Subscribe to API changelog updates so deprecation notices reach you immediately rather than when a dashboard banner is already visible.
+
+<CardGroup cols={2}>
+  <Card title="API Changelog" icon="clock-rotate-left" href="/support/changelog">
+    Full history of every API change, deprecation notice, and new version announcement.
+  </Card>
+  <Card title="API Endpoints Reference" icon="book" href="/code/api/endpoints">
+    Complete reference for all v1 and v2 endpoints, request parameters, and response schemas.
+  </Card>
+  <Card title="Error Reference" icon="triangle-exclamation" href="/code/api/errors">
+    Understand the `410 Gone` and other status codes you may encounter after a sunset.
+  </Card>
+  <Card title="Rate Limits" icon="gauge" href="/code/advanced/rate-limits">
+    Check whether v2 introduces different rate limit behaviour for your plan.
+  </Card>
+</CardGroup>

@@ -1,0 +1,90 @@
+---
+title: "Key Concepts: Understanding How Google Works"
+sidebarTitle: "Key Concepts"
+description: "Understand the core building blocks of Google — workspaces, projects, resources, API keys, and webhooks — before you build."
+---
+
+Before diving into guides and API references, it helps to understand how Google organizes your data and how its core primitives relate to each other. Every feature you use — from storing records to receiving real-time event notifications — builds on the six concepts described below.
+
+## Core Building Blocks
+
+<CardGroup cols={2}>
+  <Card title="Workspace" icon="building">
+    A **Workspace** is the top-level container for your entire organization on Google. It holds all your projects, members, settings, and billing information in one place. Think of it as your company's private space on the platform — isolated from all other organizations. Every API request is scoped to a workspace, and each workspace has its own set of API keys and environment configurations.
+  </Card>
+  <Card title="Projects" icon="folder-open">
+    **Projects** are logical groupings of related resources within a workspace. Use projects to separate concerns — for example, one project per product, team, or application. Projects let you apply independent access controls, so you can grant a contractor access to a single project without exposing the rest of your workspace. A workspace can contain an unlimited number of projects.
+  </Card>
+  <Card title="Resources" icon="database">
+    **Resources** are the core data objects you create, read, update, and delete through the Google API. Resources come in three types: **Records** (structured data entries), **Files** (binary attachments such as documents and images), and **Events** (immutable time-stamped activity entries). Every resource belongs to exactly one project and carries a globally unique ID you can use to reference it across API calls.
+  </Card>
+  <Card title="API Keys" icon="key">
+    **API Keys** are long-lived credentials that authenticate your requests to the Google API. Each key is scoped to a workspace and can optionally be restricted to specific projects or resource types. You generate and revoke keys from **Settings → API Keys**. For automated workloads and CI/CD pipelines, use a dedicated key rather than a personal one so access can be revoked independently if needed.
+  </Card>
+  <Card title="Webhooks" icon="webhook">
+    **Webhooks** are event-driven HTTP callbacks that Google sends to an endpoint you control whenever something noteworthy happens — a resource is created, updated, or deleted; a job completes; or an alert fires. Instead of polling the API for changes, you register a webhook URL and Google pushes notifications to you in real time. Each webhook payload is signed so you can verify its authenticity on your server.
+  </Card>
+  <Card title="Environments" icon="layers">
+    **Environments** give you separate, isolated contexts within a single workspace for development, staging, and production workloads. Resources, API keys, and webhook configurations are all environment-scoped — changes in your `dev` environment never affect `prod`. Switch between environments from the environment selector in the dashboard header, or target a specific environment in your API calls using the `X-Environment` request header.
+  </Card>
+</CardGroup>
+
+---
+
+## How the Concepts Relate
+
+Understanding how these building blocks fit together helps you design your integration correctly from the start.
+
+<Accordion title="Hierarchy at a glance">
+  Google's data model follows a simple hierarchy:
+
+  ```
+  Workspace
+  └── Environment (production / staging / development)
+      └── Project
+          └── Resource (Record | File | Event)
+  ```
+
+  **API Keys** are issued at the workspace level but can be scoped down to specific environments or projects. **Webhooks** are configured per environment, so you can route production events to your live alert system while development events go to a test endpoint.
+</Accordion>
+
+<Accordion title="When to create multiple projects">
+  Create a new project when you have a distinct set of resources that:
+
+  - Should have **independent access controls** (for example, a contractor should see Project A but not Project B).
+  - Belong to a **separate application or service** in your architecture.
+  - Need to be **deleted or archived** as a unit without affecting other resources.
+
+  Avoid creating a project per individual user or per small feature — keep your project count manageable so the workspace remains easy to navigate.
+</Accordion>
+
+<Accordion title="API Keys vs. environments">
+  A single API key can be scoped to one or more environments. Best practice is to use **separate keys per environment** so that a leaked development key cannot be used to access production data. Rotate keys regularly and set expiration dates for keys used by third-party integrations.
+</Accordion>
+
+---
+
+## Next Steps
+
+Now that you understand the building blocks, put them into practice.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Generate your first API key and make a live API call in under five minutes.
+  </Card>
+  <Card title="Core Workflows" icon="map" href="/guides/core-workflows">
+    Follow step-by-step guides for creating projects, managing resources, and more.
+  </Card>
+  <Card title="API Keys" icon="key" href="/code/api/authentication">
+    Learn how to create, scope, rotate, and revoke API keys securely.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/code/api/webhooks">
+    Set up webhooks and verify signed payloads in your application.
+  </Card>
+  <Card title="Environments" icon="layers" href="/configuration/environment">
+    Configure production, staging, and development environments for your workspace.
+  </Card>
+  <Card title="Permissions" icon="shield" href="/configuration/permissions">
+    Control who can access which projects and resources within your workspace.
+  </Card>
+</CardGroup>

@@ -1,0 +1,161 @@
+---
+title: "Connect Google to Your Existing Tools and Platforms"
+sidebarTitle: "Integrations"
+description: "Set up integrations between Google and third-party tools including Slack, Zapier, GitHub, and custom webhooks to automate your workflow."
+---
+
+Google integrates with the tools your team already uses so that knowledge flows where it's needed without manual copy-paste. You can push notifications to Slack, trigger Zaps in Zapier, sync documentation with GitHub repositories, or call any HTTP endpoint with a custom webhook. This page explains how to install and configure each integration.
+
+## Available Integrations
+
+<CardGroup cols={2}>
+  <Card title="Slack" icon="slack" href="/guides/integrations">
+    Post real-time notifications to any channel when resources are created, updated, or commented on.
+  </Card>
+  <Card title="GitHub" icon="github" href="/guides/integrations">
+    Sync docs with your repos, link pull requests to resources, and trigger workflows on code events.
+  </Card>
+  <Card title="Zapier" icon="bolt" href="/guides/integrations">
+    Connect Google to 5,000+ apps using Zapier's no-code automation platform.
+  </Card>
+  <Card title="Custom Webhooks" icon="webhook" href="/guides/integrations">
+    Send event payloads to any HTTP endpoint — your own API, a serverless function, or a third-party service.
+  </Card>
+</CardGroup>
+
+---
+
+## Install an Integration
+
+All integrations follow the same installation path before you configure the provider-specific settings.
+
+<Steps>
+  <Step title="Open Integration Settings">
+    Go to **Settings** (gear icon in the lower-left sidebar) and click **Integrations** in the left menu.
+  </Step>
+  <Step title="Browse the integration catalog">
+    The catalog lists all available integrations. Use the search bar or category filters to find the one you want.
+  </Step>
+  <Step title="Click Install">
+    Click the integration card, then click **Install**. You'll be taken to a provider-specific configuration screen (detailed in the sections below).
+  </Step>
+  <Step title="Verify the connection">
+    After saving, the integration card shows a green **Connected** badge. Most integrations also display a **Send Test Event** button you can use to confirm the connection is working end-to-end.
+  </Step>
+</Steps>
+
+<Warning>
+  If an API key, OAuth token, or webhook secret is ever compromised, revoke it immediately in the provider's dashboard and re-authorize the integration in **Settings → Integrations**. Leaving a compromised credential active can expose your data to unauthorized third parties.
+</Warning>
+
+---
+
+## Configure Each Integration
+
+<Tabs>
+  <Tab title="Slack">
+    ### Connect your Slack workspace
+
+    <Steps>
+      <Step title="Authorize Google in Slack">
+        On the Slack integration configuration page, click **Connect to Slack**. You are redirected to Slack's OAuth consent screen. Select the workspace you want to connect and click **Allow**.
+      </Step>
+      <Step title="Choose a notification channel">
+        Back in Google, use the **Default Channel** dropdown to select the Slack channel where notifications should be posted. You can type to search for a channel by name.
+
+        <Note>
+          Google requires the `channels:read` and `chat:write` Slack OAuth scopes. If you don't see a channel in the dropdown, verify that the Google Slack App has been added to that channel (`/invite @Google`).
+        </Note>
+      </Step>
+      <Step title="Select notification events">
+        Check the events you want to post to Slack — for example **Resource Created**, **Comment Added**, or **Status Changed**. You can override the channel per-event type if needed.
+      </Step>
+      <Step title="Save and test">
+        Click **Save Configuration**, then click **Send Test Message** to confirm a message arrives in the selected channel.
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="GitHub">
+    ### Authorize and select repositories
+
+    <Steps>
+      <Step title="Start the OAuth flow">
+        On the GitHub integration configuration page, click **Authorize with GitHub**. GitHub asks you to grant Google permission to access your account or organization. Click **Authorize**.
+      </Step>
+      <Step title="Select repositories">
+        After authorization, Google lists all repositories the GitHub App has been installed on. Toggle on the repos you want to link. Google can then surface pull requests, commits, and issues alongside related resources.
+
+        <Tip>
+          Install the Google GitHub App at the organization level to avoid having to re-authorize when new repos are created.
+        </Tip>
+      </Step>
+      <Step title="Configure sync settings">
+        Choose whether to **Pull docs from repo** (import Markdown files as Google resources), **Push docs to repo** (write resource content back to a branch), or both. Set the target branch and folder path for the sync.
+      </Step>
+      <Step title="Save and trigger an initial sync">
+        Click **Save Configuration**. Click **Sync Now** to run the first import immediately rather than waiting for the next scheduled sync.
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Zapier">
+    ### Connect Google to Zapier
+
+    <Steps>
+      <Step title="Copy your API key">
+        On the Zapier integration page, copy the API key shown under **Your API Key**. This key authenticates Google as a Zapier trigger or action app.
+
+        <Warning>
+          Treat this API key like a password. Do not paste it into public Zap descriptions, shared documents, or version-controlled files. If exposed, regenerate it immediately from this page.
+        </Warning>
+      </Step>
+      <Step title="Create a new Zap in Zapier">
+        Log in to [zapier.com](https://zapier.com) and click **Create Zap**. Search for **Google** in the app picker and select it as your trigger or action app.
+      </Step>
+      <Step title="Authenticate with your API key">
+        When prompted for credentials, paste the API key you copied in step 1. Zapier validates the key and lists your Google account.
+      </Step>
+      <Step title="Configure your Zap">
+        Choose a trigger event (e.g., **New Resource Created**) or action (e.g., **Create Resource**), map the fields from the connected apps, and turn your Zap on. Test the Zap in Zapier's built-in test runner before enabling it in production.
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Custom Webhook">
+    ### Set up a custom webhook endpoint
+
+    <Steps>
+      <Step title="Provide your endpoint URL">
+        On the Custom Webhook configuration page, enter the full HTTPS URL of the endpoint that should receive events — for example `https://api.yourapp.com/webhooks/google`. HTTP (non-TLS) endpoints are not accepted.
+      </Step>
+      <Step title="Add a shared secret (recommended)">
+        Enter a **Signing Secret** in the provided field. Google will include an `X-Google-Signature` header on every request, which your server can use to verify the payload hasn't been tampered with.
+
+        <Info>
+          See the [Webhooks reference](/code/api/webhooks) for the HMAC-SHA256 signature verification algorithm and example code in Python, Node.js, and Ruby.
+        </Info>
+      </Step>
+      <Step title="Choose events to subscribe to">
+        Check the event types you want delivered to your endpoint. Available events include **resource.created**, **resource.updated**, **resource.deleted**, **comment.created**, and **member.invited**, among others.
+      </Step>
+      <Step title="Save and send a test payload">
+        Click **Save Webhook**. Click **Send Test Payload** to POST a sample event to your endpoint. Inspect the request in your server logs or in a tool like [webhook.site](https://webhook.site) to confirm the shape of the payload.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+---
+
+## Manage Installed Integrations
+
+From **Settings → Integrations**, you can view all active integrations at a glance. Click any installed integration to edit its configuration, pause event delivery, or uninstall it entirely. Uninstalling an integration revokes Google's access to the third-party platform — you will need to re-authorize if you reinstall it later.
+
+<Accordion title="What happens to data when I uninstall an integration?">
+  Uninstalling an integration stops all future event delivery and removes stored OAuth tokens or API keys from Google's systems. It does not delete resources that were previously imported via the integration (for example, docs synced from GitHub). You must manually delete those resources if they are no longer needed.
+</Accordion>
+
+<Accordion title="Can I install the same integration multiple times?">
+  Some integrations — particularly custom webhooks — support multiple instances so you can send events to more than one endpoint. Slack and GitHub are limited to one active connection per organization. To switch workspaces or accounts, uninstall the existing connection first.
+</Accordion>

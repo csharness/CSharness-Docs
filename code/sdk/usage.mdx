@@ -1,0 +1,466 @@
+---
+title: "Use the Google SDK to Interact with the API"
+sidebarTitle: "SDK Usage"
+description: "Learn how to perform common operations with the Google SDK — listing resources, creating records, handling errors, and paginating results."
+---
+
+Once you have the SDK installed and a client initialized, every API operation is available as a method on the client object. This page walks through the most common operations — listing, creating, updating, deleting resources — with copy-pasteable examples for JavaScript, Python, and Go. Each snippet assumes you have already created and exported a client as shown in the [installation guide](/code/sdk/installation).
+
+## Create the client
+
+Import your shared client instance or create a new one inline. Creating a single client and reusing it across your application is the recommended pattern — the client manages connection pooling and keeps your API key in one place.
+
+<Tabs>
+  <Tab title="JavaScript / TypeScript">
+    ```typescript title="src/googleClient.ts"
+    import { GoogleClient } from "@google/sdk";
+
+    const client = new GoogleClient({
+      apiKey: process.env.GOOGLE_API_KEY,
+    });
+
+    export default client;
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python title="google_client.py"
+    from google_sdk import GoogleClient
+    import os
+
+    client = GoogleClient(api_key=os.environ["GOOGLE_API_KEY"])
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go title="client.go"
+    package main
+
+    import (
+        "os"
+        google "github.com/google/google-sdk-go"
+    )
+
+    var client = google.NewClient(
+        google.WithAPIKey(os.Getenv("GOOGLE_API_KEY")),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## List resources with pagination
+
+The `list` method returns the first page of results along with a cursor and a `has_more` flag. Pass the cursor back on subsequent calls to walk through all pages.
+
+<Tabs>
+  <Tab title="JavaScript / TypeScript">
+    ```typescript
+    import client from "./googleClient";
+
+    async function listAllResources() {
+      let cursor: string | undefined;
+      const results = [];
+
+      do {
+        const page = await client.resources.list({
+          limit: 50,
+          cursor,
+        });
+
+        results.push(...page.data);
+        cursor = page.has_more ? page.next_cursor : undefined;
+      } while (cursor);
+
+      return results;
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from google_client import client
+
+    def list_all_resources():
+        results = []
+        cursor = None
+
+        while True:
+            page = client.resources.list(limit=50, cursor=cursor)
+            results.extend(page.data)
+
+            if not page.has_more:
+                break
+            cursor = page.next_cursor
+
+        return results
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    package main
+
+    import (
+        "context"
+        google "github.com/google/google-sdk-go"
+    )
+
+    func listAllResources(ctx context.Context) ([]google.Resource, error) {
+        var results []google.Resource
+        var cursor string
+
+        for {
+            page, err := client.Resources.List(ctx, &google.ListParams{
+                Limit:  50,
+                Cursor: cursor,
+            })
+            if err != nil {
+                return nil, err
+            }
+
+            results = append(results, page.Data...)
+
+            if !page.HasMore {
+                break
+            }
+            cursor = page.NextCursor
+        }
+
+        return results, nil
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Create a resource
+
+Pass a struct or object with the required fields to `resources.create`. The SDK validates required fields before sending the request and returns the newly created resource on success.
+
+<Tabs>
+  <Tab title="JavaScript / TypeScript">
+    ```typescript
+    import client from "./googleClient";
+
+    async function createResource() {
+      const resource = await client.resources.create({
+        name: "My new resource",
+        type: "document",
+        metadata: {
+          author: "jane@example.com",
+          tags: ["onboarding", "draft"],
+        },
+      });
+
+      console.log("Created:", resource.id);
+      return resource;
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from google_client import client
+
+    def create_resource():
+        resource = client.resources.create(
+            name="My new resource",
+            type="document",
+            metadata={
+                "author": "jane@example.com",
+                "tags": ["onboarding", "draft"],
+            },
+        )
+
+        print("Created:", resource.id)
+        return resource
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    package main
+
+    import (
+        "context"
+        "fmt"
+        google "github.com/google/google-sdk-go"
+    )
+
+    func createResource(ctx context.Context) (*google.Resource, error) {
+        resource, err := client.Resources.Create(ctx, &google.CreateResourceParams{
+            Name: "My new resource",
+            Type: "document",
+            Metadata: map[string]interface{}{
+                "author": "jane@example.com",
+                "tags":   []string{"onboarding", "draft"},
+            },
+        })
+        if err != nil {
+            return nil, err
+        }
+
+        fmt.Println("Created:", resource.ID)
+        return resource, nil
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Update a resource
+
+Pass the resource ID and only the fields you want to change. The SDK performs a partial update (HTTP `PATCH`) — any fields you omit remain unchanged.
+
+<Tabs>
+  <Tab title="JavaScript / TypeScript">
+    ```typescript
+    import client from "./googleClient";
+
+    async function updateResource(id: string) {
+      const updated = await client.resources.update(id, {
+        name: "Renamed resource",
+        metadata: {
+          tags: ["onboarding", "published"],
+        },
+      });
+
+      console.log("Updated at:", updated.updated_at);
+      return updated;
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from google_client import client
+
+    def update_resource(resource_id: str):
+        updated = client.resources.update(
+            resource_id,
+            name="Renamed resource",
+            metadata={"tags": ["onboarding", "published"]},
+        )
+
+        print("Updated at:", updated.updated_at)
+        return updated
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    package main
+
+    import (
+        "context"
+        "fmt"
+        google "github.com/google/google-sdk-go"
+    )
+
+    func updateResource(ctx context.Context, id string) (*google.Resource, error) {
+        updated, err := client.Resources.Update(ctx, id, &google.UpdateResourceParams{
+            Name: "Renamed resource",
+            Metadata: map[string]interface{}{
+                "tags": []string{"onboarding", "published"},
+            },
+        })
+        if err != nil {
+            return nil, err
+        }
+
+        fmt.Println("Updated at:", updated.UpdatedAt)
+        return updated, nil
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Delete a resource
+
+Pass the resource ID to `resources.delete`. A successful deletion returns no body — the SDK resolves the promise (or returns `nil` in Go) to confirm the operation completed.
+
+<Tabs>
+  <Tab title="JavaScript / TypeScript">
+    ```typescript
+    import client from "./googleClient";
+
+    async function deleteResource(id: string) {
+      await client.resources.delete(id);
+      console.log("Deleted resource:", id);
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from google_client import client
+
+    def delete_resource(resource_id: str):
+        client.resources.delete(resource_id)
+        print("Deleted resource:", resource_id)
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    package main
+
+    import (
+        "context"
+        "fmt"
+    )
+
+    func deleteResource(ctx context.Context, id string) error {
+        if err := client.Resources.Delete(ctx, id); err != nil {
+            return err
+        }
+
+        fmt.Println("Deleted resource:", id)
+        return nil
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Handle errors
+
+The SDK surfaces API errors as typed exceptions or error values, so you can inspect the status code and message without parsing raw HTTP responses.
+
+<Tabs>
+  <Tab title="JavaScript / TypeScript">
+    ```typescript
+    import client from "./googleClient";
+    import { GoogleAPIError, GoogleNotFoundError } from "@google/sdk";
+
+    async function safeGet(id: string) {
+      try {
+        const resource = await client.resources.get(id);
+        return resource;
+      } catch (err) {
+        if (err instanceof GoogleNotFoundError) {
+          console.warn("Resource not found:", id);
+          return null;
+        }
+
+        if (err instanceof GoogleAPIError) {
+          console.error(`API error ${err.statusCode}:`, err.message);
+          throw err;
+        }
+
+        // Unexpected non-SDK error
+        throw err;
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from google_client import client
+    from google_sdk.exceptions import GoogleNotFoundError, GoogleAPIError
+
+    def safe_get(resource_id: str):
+        try:
+            return client.resources.get(resource_id)
+        except GoogleNotFoundError:
+            print("Resource not found:", resource_id)
+            return None
+        except GoogleAPIError as exc:
+            print(f"API error {exc.status_code}: {exc.message}")
+            raise
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    package main
+
+    import (
+        "context"
+        "errors"
+        "fmt"
+        google "github.com/google/google-sdk-go"
+    )
+
+    func safeGet(ctx context.Context, id string) (*google.Resource, error) {
+        resource, err := client.Resources.Get(ctx, id)
+        if err != nil {
+            var apiErr *google.APIError
+            if errors.As(err, &apiErr) {
+                if apiErr.StatusCode == 404 {
+                    fmt.Println("Resource not found:", id)
+                    return nil, nil
+                }
+                fmt.Printf("API error %d: %s\n", apiErr.StatusCode, apiErr.Message)
+            }
+            return nil, err
+        }
+
+        return resource, nil
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The SDK error hierarchy follows the API's own status codes. Import the specific error types your code needs — catching only what you can handle lets unexpected errors surface naturally.
+</Note>
+
+## Async and context patterns
+
+JavaScript uses `async`/`await` natively with every SDK method. Go requires passing a `context.Context` as the first argument to support cancellation and deadlines.
+
+<Tabs>
+  <Tab title="JavaScript / TypeScript">
+    ```typescript
+    import client from "./googleClient";
+
+    // Using Promise.all for parallel requests
+    async function getMultiple(ids: string[]) {
+      const resources = await Promise.all(
+        ids.map((id) => client.resources.get(id))
+      );
+
+      return resources;
+    }
+
+    // Using AbortController for cancellation
+    async function getWithTimeout(id: string, timeoutMs: number) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        return await client.resources.get(id, { signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    package main
+
+    import (
+        "context"
+        "time"
+    )
+
+    // With deadline
+    func getWithDeadline(id string) (*google.Resource, error) {
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+
+        return client.Resources.Get(ctx, id)
+    }
+
+    // With cancellation from an HTTP request lifecycle
+    func getFromHTTPHandler(requestCtx context.Context, id string) (*google.Resource, error) {
+        return client.Resources.Get(requestCtx, id)
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="SDK Examples" icon="rectangle-code" href="/code/sdk/examples">
+    See complete runnable patterns including bulk operations, webhook handling, and retry logic.
+  </Card>
+  <Card title="API Endpoints" icon="plug" href="/code/api/endpoints">
+    Explore the full endpoint reference with request and response schemas.
+  </Card>
+  <Card title="Rate Limits" icon="gauge" href="/code/advanced/rate-limits">
+    Understand request limits and how to implement backoff strategies.
+  </Card>
+  <Card title="Error Reference" icon="circle-exclamation" href="/code/api/errors">
+    Browse every error code the API returns and how to handle each one.
+  </Card>
+</CardGroup>

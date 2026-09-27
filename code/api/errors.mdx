@@ -1,0 +1,202 @@
+---
+title: "API Error Codes and How to Handle Them"
+sidebarTitle: "Errors"
+description: "Understand every error code returned by the Google API, what causes each one, and how to resolve or retry the request correctly."
+---
+
+When a Google API request cannot be completed, the server responds with an HTTP status code in the `4xx` or `5xx` range and a JSON body that describes exactly what went wrong. Understanding the error envelope and the individual codes lets you build resilient integrations that fail gracefully and recover automatically where possible.
+
+## Error Envelope
+
+Every error response uses the same JSON structure, regardless of the endpoint or error type:
+
+```json title="Standard error envelope"
+{
+  "error": {
+    "code": "validation_error",
+    "message": "The 'name' field is required.",
+    "details": [
+      {
+        "field": "name",
+        "issue": "required"
+      }
+    ]
+  }
+}
+```
+
+<ResponseField name="error" type="object" required>
+  Top-level error container present on all non-2xx responses.
+
+  <Expandable title="error fields">
+    <ResponseField name="code" type="string" required>
+      Machine-readable error code. Use this in your error-handling logic, not the `message`.
+    </ResponseField>
+
+    <ResponseField name="message" type="string" required>
+      Human-readable description of what went wrong. Suitable for logging; do not display raw messages directly to end-users without sanitization.
+    </ResponseField>
+
+    <ResponseField name="details" type="array">
+      Optional array of additional context objects. Present on `validation_error` and a few other codes to identify specific fields or constraints that failed.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Error Code Reference
+
+| HTTP Status | Error Code | Meaning | Common Cause |
+|---|---|---|---|
+| `400` | `bad_request` | The request is malformed or missing required structure. | Malformed JSON body, wrong `Content-Type`, or missing required headers. |
+| `400` | `validation_error` | One or more request fields failed validation. | Missing required field, value out of allowed range, or invalid enum value. |
+| `401` | `unauthorized` | No valid credential was supplied. | Missing `Authorization` header, or the token format is invalid. |
+| `401` | `token_expired` | The OAuth access token has expired. | The token's `expires_in` window has passed. Refresh the token and retry. |
+| `403` | `forbidden` | The credential is valid but the caller lacks permission. | Attempting to modify a resource owned by another workspace. |
+| `403` | `insufficient_scope` | The OAuth token does not grant the required scope. | Calling a write endpoint with a token that only has the `read` scope. |
+| `404` | `not_found` | The requested resource or endpoint does not exist. | Incorrect or deleted resource ID, or a typo in the URL path. |
+| `409` | `conflict` | The request conflicts with the current state of the server. | Creating a resource with a slug that already exists; concurrent writes. |
+| `422` | `unprocessable_entity` | The request is syntactically valid but semantically incorrect. | A field value violates a business rule, such as a circular project reference. |
+| `429` | `rate_limit_exceeded` | You have exceeded the allowed request rate. | Sending too many requests in a short window. See [Rate Limits](/code/advanced/rate-limits). |
+| `500` | `internal_error` | An unexpected error occurred on Google's servers. | Temporary server-side fault. Retrying with backoff usually resolves this. |
+| `503` | `service_unavailable` | The API is temporarily offline or undergoing maintenance. | Planned maintenance or an active incident. Check the status page. |
+
+<Note>
+  Check [status.google.example](https://status.google.example) for real-time information about ongoing incidents and scheduled maintenance windows that may be causing `500` or `503` errors.
+</Note>
+
+---
+
+## Sample Error Responses
+
+<Tabs>
+  <Tab title="400 Validation Error">
+    ```json title="400 validation_error response"
+    {
+      "error": {
+        "code": "validation_error",
+        "message": "Request validation failed.",
+        "details": [
+          {
+            "field": "name",
+            "issue": "required"
+          },
+          {
+            "field": "project_id",
+            "issue": "must be a valid project ID"
+          }
+        ]
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="401 Unauthorized">
+    ```json title="401 unauthorized response"
+    {
+      "error": {
+        "code": "unauthorized",
+        "message": "No valid authentication credential was provided.",
+        "details": []
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="429 Rate Limited">
+    ```json title="429 rate_limit_exceeded response"
+    {
+      "error": {
+        "code": "rate_limit_exceeded",
+        "message": "You have exceeded the rate limit of 1000 requests per minute.",
+        "details": [
+          {
+            "retry_after_seconds": 42
+          }
+        ]
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="503 Service Unavailable">
+    ```json title="503 service_unavailable response"
+    {
+      "error": {
+        "code": "service_unavailable",
+        "message": "The service is temporarily unavailable. Please try again shortly.",
+        "details": []
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Retry Guidance
+
+Not all errors are worth retrying. Retrying a client-side error (`4xx`) without fixing the underlying issue will just produce the same error repeatedly.
+
+<CardGroup cols={2}>
+  <Card title="Retryable errors" icon="rotate-right">
+    Retry these errors using **exponential backoff**:
+
+    - `429 rate_limit_exceeded` — wait for the number of seconds in `retry_after_seconds` before retrying.
+    - `500 internal_error` — retry up to 3 times with delays of 1 s, 5 s, and 30 s.
+    - `503 service_unavailable` — retry with longer delays (30 s, 2 min, 5 min) and monitor the status page.
+  </Card>
+  <Card title="Non-retryable errors" icon="circle-xmark">
+    Fix these errors in your code before retrying:
+
+    - `400` — correct the request body or query parameters.
+    - `401` — supply or refresh a valid credential.
+    - `403` — check permissions or request broader OAuth scopes.
+    - `404` — verify the resource ID or URL path.
+    - `409` — resolve the conflict (for example, use a different slug).
+    - `422` — fix the business-rule violation described in the error message.
+  </Card>
+</CardGroup>
+
+### Exponential backoff example
+
+```javascript title="Retry with exponential backoff (JavaScript)"
+async function requestWithRetry(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+
+    if (response.ok) return response;
+
+    const { error } = await response.json();
+    const retryable = response.status === 429 || response.status >= 500;
+
+    if (!retryable || attempt === maxRetries) {
+      throw new Error(`API error: ${error.code} — ${error.message}`);
+    }
+
+    // Respect Retry-After for rate limits, otherwise use exponential backoff
+    const retryAfter =
+      error.details?.[0]?.retry_after_seconds ?? Math.pow(2, attempt + 1);
+
+    await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+  }
+}
+```
+
+<Tip>
+  Add **jitter** (a small random delay) to your backoff intervals when many clients might retry simultaneously. This prevents retry storms that can worsen an ongoing incident.
+</Tip>
+
+---
+
+## HTTP Response Headers
+
+On every response, Google includes headers to help with debugging and rate-limit management:
+
+| Header | Description |
+|---|---|
+| `X-Request-Id` | Unique identifier for the request. Include this when contacting support. |
+| `X-RateLimit-Limit` | Maximum requests allowed in the current window. |
+| `X-RateLimit-Remaining` | Requests remaining in the current window. |
+| `X-RateLimit-Reset` | Unix timestamp when the current window resets. |
+| `Retry-After` | Seconds to wait before retrying (only on `429` responses). |
+
+For full rate-limit details and per-plan quotas, see the [Rate Limits reference](/code/advanced/rate-limits).

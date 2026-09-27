@@ -1,47 +1,107 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with Google in Under 5 Minutes"
+sidebarTitle: "Quick Start"
+description: "Learn how to set up your account, generate an API key, and make your first API call with Google in just a few steps."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+Google gets you from zero to your first API response in minutes. This guide walks you through creating an account, generating credentials, and verifying that everything works with a single test request — no prior setup required.
 
 ## Prerequisites
 
-Before you begin, you must have:
+Before you begin, make sure you have the following:
 
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
+- A **Google account** — sign up for free at [app.google.com](https://app.google.com) if you don't have one yet.
+- A **modern browser** (Chrome, Firefox, Safari, or Edge) to access the dashboard, or an **HTTP client** such as `curl`, Postman, or Insomnia to make API calls.
 
-## Get started
+---
+
+## Steps
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
 
-    ```bash
-    npm install your-package
-    ```
-  </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+  ### Sign Up or Log In
 
-    ```bash
-    your-cli init
-    ```
-  </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+  Open [app.google.com](https://app.google.com) in your browser. If you already have an account, click **Log In** and enter your credentials. If you're new, click **Sign Up**, enter your email address and a strong password, then verify your email using the confirmation link sent to your inbox.
 
-    ```bash
-    your-cli start
-    ```
-  </Step>
+  Once authenticated, you land on your **Dashboard** — the central hub for all your projects and settings.
+
+  ### Generate an API Key
+
+  API keys authenticate every request you make to the Google API. To create one:
+
+  1. Click **Settings** in the left sidebar.
+  2. Select **API Keys** from the Settings menu.
+  3. Click **New Key** in the top-right corner.
+  4. Give your key a descriptive name (for example, `my-first-key`) and click **Create**.
+  5. Copy the key immediately — it is only shown once.
+
+  <Note>
+    Keep your API key secret. Never commit it to source control, expose it in client-side code, or share it publicly. If a key is compromised, revoke it immediately from **Settings → API Keys** and generate a new one.
+  </Note>
+
+  ### Make Your First API Call
+
+  With your key in hand, verify that everything is working by calling the ping endpoint. This lightweight endpoint confirms your credentials are valid and returns the current API version.
+
+  <CodeGroup>
+
+  ```bash cURL
+  curl -X GET https://api.google.com/api/v1/ping \
+    -H "Authorization: Bearer <YOUR_API_KEY>"
+  ```
+
+  ```python Python
+  import requests
+
+  response = requests.get(
+      "https://api.google.com/api/v1/ping",
+      headers={"Authorization": "Bearer <YOUR_API_KEY>"}
+  )
+  print(response.json())
+  ```
+
+  ```javascript Node.js
+  const response = await fetch("https://api.google.com/api/v1/ping", {
+    method: "GET",
+    headers: {
+      Authorization: "Bearer <YOUR_API_KEY>",
+    },
+  });
+
+  const data = await response.json();
+  console.log(data);
+  ```
+
+  </CodeGroup>
+
+  A successful response looks like this:
+
+  ```json Response
+  {
+    "status": "ok",
+    "version": "1.0"
+  }
+  ```
+
+  If you receive a `401 Unauthorized` error, double-check that you copied the full API key and that the `Authorization` header is formatted exactly as shown above.
+
+  ### Explore Further
+
+  You're all set! Continue building by exploring the resources below.
+
+  <CardGroup cols={2}>
+    <Card title="Guides" icon="map" href="/guides/core-workflows">
+      Follow step-by-step walkthroughs for the most common Google workflows.
+    </Card>
+    <Card title="API Reference" icon="code" href="/code/api/endpoints">
+      Browse every available endpoint, parameter, and response schema.
+    </Card>
+    <Card title="SDK" icon="box" href="/code/sdk/installation">
+      Install the official Google SDK and start building in your language of choice.
+    </Card>
+    <Card title="Key Concepts" icon="lightbulb" href="/get-started/key-concepts">
+      Understand workspaces, projects, resources, and other core building blocks.
+    </Card>
+  </CardGroup>
+
 </Steps>
-
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
-
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>

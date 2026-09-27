@@ -1,0 +1,149 @@
+---
+title: "Manage Team Roles and Resource Permissions in Google"
+sidebarTitle: "Permissions"
+description: "Control what team members can see and do in Google by assigning workspace roles and setting resource-level permissions."
+---
+
+Google uses a two-layer permission model. The first layer is **workspace roles**, which define what a member can do across the entire workspace. The second layer is **resource-level permissions**, which let you fine-tune access to individual pages, documents, and collections. Together, these two layers give you precise control over who can see and modify each piece of content.
+
+## Workspace Roles
+
+Every member of a Google workspace is assigned one of four roles: **Owner**, **Admin**, **Member**, or **Viewer**. A member's workspace role sets the ceiling for what they can do — resource-level permissions can further restrict access but cannot grant more than the workspace role allows.
+
+### Role Capabilities
+
+| Capability | Owner | Admin | Member | Viewer |
+|---|:---:|:---:|:---:|:---:|
+| View all resources | ✅ | ✅ | ✅ | ✅ |
+| Create and edit resources | ✅ | ✅ | ✅ | ❌ |
+| Delete resources | ✅ | ✅ | ✅ | ❌ |
+| Invite new members | ✅ | ✅ | ❌ | ❌ |
+| Assign and change member roles | ✅ | ✅ | ❌ | ❌ |
+| Manage integrations | ✅ | ✅ | ❌ | ❌ |
+| Generate and revoke API keys | ✅ | ✅ | ❌ | ❌ |
+| Manage billing and plan | ✅ | ❌ | ❌ | ❌ |
+| Transfer or delete workspace | ✅ | ❌ | ❌ | ❌ |
+
+<Info>
+  Each workspace has exactly **one Owner**. Ownership can be transferred but not shared. All other roles can be assigned to multiple members simultaneously.
+</Info>
+
+### Role Descriptions
+
+<Accordion title="Owner">
+  The Owner has unrestricted access to every workspace capability, including billing, workspace deletion, and ownership transfer. Assign this role only to the person who is legally and operationally responsible for the workspace.
+</Accordion>
+
+<Accordion title="Admin">
+  Admins can manage members, configure integrations, and generate API keys. They cannot access billing or perform destructive workspace-level actions. Use this role for team leads and IT administrators.
+</Accordion>
+
+<Accordion title="Member">
+  Members can create, edit, and delete resources but cannot invite others or change settings. This is the appropriate default role for most team contributors.
+</Accordion>
+
+<Accordion title="Viewer">
+  Viewers have read-only access across the workspace, subject to resource-level permissions. Use this role for stakeholders, clients, or contractors who need visibility but should not make changes.
+</Accordion>
+
+## Assigning Roles
+
+You can assign or change a member's workspace role from the Team settings page. Only Owners and Admins can change roles, and neither can elevate a member to a role higher than their own.
+
+<Steps>
+  <Step title="Open Team settings">
+    Navigate to **Settings → Team** in the left sidebar. You see a list of all workspace members, their current roles, and when they joined.
+  </Step>
+  <Step title="Find the member">
+    Use the search bar to find the member by name or email address, or scroll through the list.
+  </Step>
+  <Step title="Edit the member's role">
+    Click the **⋯** menu to the right of the member's row and select **Edit Role**. A dropdown shows the available roles you can assign.
+  </Step>
+  <Step title="Select the new role">
+    Choose the desired role from the dropdown. A summary of what the role can do is shown beneath the dropdown.
+  </Step>
+  <Step title="Confirm the change">
+    Click **Save**. The member's role updates immediately. They receive an email notification informing them of the change.
+  </Step>
+</Steps>
+
+<Note>
+  A member who is currently logged in will see their new permissions applied on their next page load or within 60 seconds — they do not need to log out and back in.
+</Note>
+
+## Resource-Level Permissions
+
+Resource-level permissions let you control access to specific pages, documents, or collections independently of workspace roles. Every resource has one of three visibility states:
+
+| Visibility | Who can access |
+|---|---|
+| **Private** | Only you (the creator) and explicitly added collaborators |
+| **Team-only** | All workspace members with at least Viewer role |
+| **Public** | Anyone with the link, including people outside the workspace |
+
+To change a resource's visibility, open the resource, click the **Share** button in the top-right corner, and select the desired visibility from the dropdown.
+
+<Tip>
+  New resources default to **Team-only** visibility. Change the default in **Settings → Defaults → New Resource Visibility** if your team typically works with private documents.
+</Tip>
+
+## Sharing a Resource with External Users
+
+You can share individual resources with people who are not members of your workspace — for example, a client who needs to review a document or a contractor who needs read access to a specific page.
+
+<Steps>
+  <Step title="Open the Share dialog">
+    Open the resource you want to share, then click **Share** in the top-right corner.
+  </Step>
+  <Step title="Invite by email">
+    In the **Invite people** field, type the external user's email address. You can add multiple addresses separated by commas.
+  </Step>
+  <Step title="Set their permission level">
+    Use the dropdown next to the email field to choose the level of access:
+    - **Can view** — read-only access to this resource only.
+    - **Can comment** — can add comments but cannot edit content.
+    - **Can edit** — can make changes to this resource only.
+  </Step>
+  <Step title="Send the invitation">
+    Click **Send Invite**. The external user receives an email with a secure link. They do not need a Google account to access a resource shared with **Can view** access.
+  </Step>
+</Steps>
+
+<Warning>
+  External users invited at **Can edit** access can modify the resource but cannot access any other part of your workspace. Review shared access regularly to ensure that external collaborators retain only the access they need.
+</Warning>
+
+## Revoking Access
+
+You can revoke a workspace member's access or an external collaborator's access at any time.
+
+<Tabs>
+  <Tab title="Revoke workspace member access">
+    <Steps>
+      <Step title="Open Team settings">
+        Navigate to **Settings → Team**.
+      </Step>
+      <Step title="Remove the member">
+        Click the **⋯** menu next to the member and select **Remove from Workspace**. Confirm in the dialog.
+      </Step>
+    </Steps>
+
+    Removing a member immediately revokes their access to all workspace resources. Resources they created remain in the workspace and are reassigned to the workspace Owner.
+  </Tab>
+  <Tab title="Revoke external collaborator access">
+    <Steps>
+      <Step title="Open the Share dialog">
+        Open the shared resource and click **Share**.
+      </Step>
+      <Step title="Manage existing access">
+        Scroll to the **People with access** section. You see a list of everyone who has been granted access.
+      </Step>
+      <Step title="Remove the collaborator">
+        Click the **✕** next to the external user's name or email and confirm. Their access link is invalidated immediately.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+For questions about roles or permissions in your workspace, see [Support & Troubleshooting](/support/troubleshooting).

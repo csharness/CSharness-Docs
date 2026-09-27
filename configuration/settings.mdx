@@ -1,0 +1,124 @@
+---
+title: "Workspace Settings: Customize Your Google Experience"
+sidebarTitle: "Settings"
+description: "Configure your workspace name, branding, locale, date formats, and default behaviors from the Google Settings dashboard."
+---
+
+Your workspace settings control how Google looks and behaves for everyone on your team. From display preferences and localization to billing and ownership, the Settings dashboard gives you a single place to manage every aspect of your workspace. Navigate to **Settings** from the left sidebar to get started.
+
+## General Settings
+
+General settings define the identity and locale of your workspace. Changes here apply across the entire workspace and are visible to all members.
+
+**Workspace name** — This appears in the header, email notifications, and shared links. Choose a name that clearly identifies your organization or project.
+
+**Logo** — Upload a PNG or SVG (recommended size: 200×200 px). Your logo appears in the top-left corner of the dashboard and in exported documents.
+
+**Timezone** — Sets the default timezone for timestamps, scheduled notifications, and date calculations. Individual members can override this in their personal preferences.
+
+**Language** — Sets the interface language for all members who have not chosen a personal preference. Google currently supports English, French, German, Spanish, and Japanese.
+
+To update any general setting:
+
+<Steps>
+  <Step title="Open Settings">
+    Click **Settings** in the left sidebar, then select **General** from the settings menu.
+  </Step>
+  <Step title="Edit the field">
+    Click the field you want to change — workspace name, logo, timezone, or language — and enter the new value.
+  </Step>
+  <Step title="Save your changes">
+    Click **Save Changes** at the bottom of the section. A confirmation banner confirms the update.
+  </Step>
+</Steps>
+
+## Default Resource Settings
+
+Default resource settings control how new pages, documents, and data entries behave when they are first created. Setting sensible defaults reduces the manual configuration needed each time a team member creates a resource.
+
+<CardGroup cols={2}>
+  <Card title="Default View Mode" icon="table-columns">
+    Choose whether new resources open in **List**, **Grid**, **Board**, or **Document** view. Members can still switch views per resource.
+  </Card>
+  <Card title="Default Fields" icon="sliders">
+    Define which fields are pre-populated on every new resource — such as Owner, Status, or Due Date — so your team starts with a consistent structure.
+  </Card>
+  <Card title="Date Format" icon="calendar">
+    Choose between `MM/DD/YYYY`, `DD/MM/YYYY`, or `YYYY-MM-DD`. This affects how dates are displayed across all resources and exports.
+  </Card>
+  <Card title="Time Format" icon="clock">
+    Select 12-hour or 24-hour clock display. This applies to all timestamps shown in the dashboard and in notifications.
+  </Card>
+</CardGroup>
+
+To configure default fields, navigate to **Settings → Defaults → Fields** and toggle or reorder the fields you want pre-applied. Drag fields to change the order they appear in new resources.
+
+## Billing & Plan Overview
+
+The **Billing** section shows your current plan, renewal date, seat count, and usage metrics. From here you can upgrade your plan, add seats, update your payment method, and download past invoices.
+
+<Info>
+  Billing is managed at the workspace level by Owners and Admins. Individual members cannot view or modify billing details unless granted explicit permission.
+</Info>
+
+Key actions available in the Billing section:
+
+- **Upgrade or downgrade** your plan to match your team's needs.
+- **Add or remove seats** — changes are prorated to your current billing cycle.
+- **Update payment method** — supports major credit cards and ACH bank transfers.
+- **Download invoices** — all past invoices are available as PDFs.
+
+For a full breakdown of plan features and pricing, see the [Google pricing page](https://google.com/pricing).
+
+## Danger Zone
+
+The Danger Zone contains irreversible workspace-level actions. These actions require Owner-level access and cannot be undone without contacting support.
+
+<Warning>
+  Actions in the Danger Zone are **permanent and irreversible**. Deleting your workspace removes all data, members, integrations, and API keys immediately. There is no grace period. Export your data before proceeding.
+</Warning>
+
+### Rename Workspace
+
+Renaming your workspace updates the display name everywhere it appears, including shared links and notification emails. It does **not** change your workspace URL slug. To update the URL slug, contact [Google Support](/support/troubleshooting).
+
+<Steps>
+  <Step title="Open the Danger Zone">
+    Scroll to the bottom of **Settings → General** and click **Danger Zone** to expand the section.
+  </Step>
+  <Step title="Click Rename Workspace">
+    Enter the new workspace name in the text field provided.
+  </Step>
+  <Step title="Confirm the change">
+    Type the current workspace name to confirm, then click **Rename**. The change takes effect immediately.
+  </Step>
+</Steps>
+
+### Transfer Ownership
+
+Transferring ownership reassigns the Owner role to another workspace member. The current Owner is demoted to Admin.
+
+<Steps>
+  <Step title="Select a new owner">
+    In the Danger Zone, click **Transfer Ownership** and choose the member from the dropdown.
+  </Step>
+  <Step title="Confirm the transfer">
+    Type your email address to confirm, then click **Transfer**. The new owner receives an email notification.
+  </Step>
+</Steps>
+
+### Delete Workspace
+
+Deleting your workspace permanently removes all content, member associations, integrations, and billing data.
+
+<Steps>
+  <Step title="Export your data">
+    Before deleting, go to **Settings → Data Management** and export all workspace data. See [Data Management](/guides/data-management) for instructions.
+  </Step>
+  <Step title="Initiate deletion">
+    In the Danger Zone, click **Delete Workspace**.
+  </Step>
+  <Step title="Confirm deletion">
+    Type the full workspace name to confirm, then click **Permanently Delete**. All data is removed within 24 hours and cannot be recovered.
+  </Step>
+</Steps>
