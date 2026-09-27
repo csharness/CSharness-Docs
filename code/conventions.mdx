@@ -1,5 +1,5 @@
 ---
-title: "API Conventions and Standards Used Across Google"
+title: "Google API Conventions, Standards, and Error Codes"
 sidebarTitle: "Conventions"
 description: "Learn the consistent naming conventions, date formats, ID formats, HTTP status codes, and error structure used throughout the Google API."
 ---
@@ -29,7 +29,7 @@ wsp_01HXZ9KQMB5XFPNQY7E2A8T6E
 IDs are **case-sensitive strings**. Never treat them as integers or parse internal structure from them — the format may evolve. Always store and compare them as opaque strings.
 
 <Note>
-  IDs use the [ULID](https://github.com/ulid/spec) format internally, which means they are roughly sortable by creation time — but rely on the `created_at` timestamp field for precise chronological ordering.
+  Resource IDs are roughly sortable by creation time due to the format used, but rely on the `created_at` timestamp field for precise chronological ordering.
 </Note>
 
 ## Timestamps
