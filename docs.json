@@ -74,5 +74,55 @@
   },
   "footer": {
     "socials": {}
-  }
+  },
+  "redirects": [
+    {
+      "source": "/introduction",
+      "destination": "/"
+    },
+    {
+      "source": "/get-started/:slug*",
+      "destination": "/quickstart"
+    },
+    {
+      "source": "/guides/:slug*",
+      "destination": "/studio/overview"
+    },
+    {
+      "source": "/configuration/:slug*",
+      "destination": "/studio/overview"
+    },
+    {
+      "source": "/support/changelog",
+      "destination": "/engineering/versioning"
+    },
+    {
+      "source": "/support/:slug*",
+      "destination": "/"
+    },
+    {
+      "source": "/code/overview",
+      "destination": "/architecture"
+    },
+    {
+      "source": "/code/architecture",
+      "destination": "/architecture"
+    },
+    {
+      "source": "/code/conventions",
+      "destination": "/engineering/coding-standard"
+    },
+    {
+      "source": "/code/api/:slug*",
+      "destination": "/firmware/host-protocol"
+    },
+    {
+      "source": "/code/advanced/versioning",
+      "destination": "/engineering/versioning"
+    },
+    {
+      "source": "/code/:slug*",
+      "destination": "/"
+    }
+  ]
 }
