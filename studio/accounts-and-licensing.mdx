@@ -1,0 +1,99 @@
+---
+title: "EVCore Studio Accounts and Licensing"
+sidebarTitle: "Accounts & Licensing"
+description: "How EVCore Studio sign-in, licenses, offline use, and device registration work. Covers the account service setup and the purchase-to-license flow."
+---
+
+EVCore Studio requires a licensed account. This page explains how sign-in works, how licenses are issued and verified, how long Studio works offline, and how devices are registered to an account.
+
+## Sign-in and account creation
+
+Studio uses Supabase Auth for accounts. You never store passwords yourself.
+
+- **Create account** — enter email and password in Studio. A confirmation code is sent to the email address. Type the code into Studio's "Confirm your email address" screen to confirm the address and sign in.
+- **Password reset** — "Forgot password?" emails a reset code. Studio asks for the code and a new password, verifies the code, sets the password, and signs you in.
+- **Resend code** — Supabase allows one email per minute per address.
+
+No free trial is offered. A new account has no license until one is bought.
+
+## License and offline use
+
+After sign-in, Studio calls `issue-license` on the account server. The server checks that the user is signed in, the email is confirmed, and an active license exists, then returns a signed license document listing the account's registered device serials.
+
+The license is signed with an Ed25519 private key that exists only on the server. Studio verifies the signature with the public key built into the app, so it can check the license offline and cannot be fooled by an edited file. The license expires 30 days after issue; Studio renews it whenever it is online (at start and every 6 hours).
+
+Studio also guards against a clock set back to extend the 30 days: it remembers the latest time it has seen and refuses licenses while the clock is earlier than that (10 minutes' tolerance).
+
+## Editions: Studio and Studio Pro
+
+One download serves both editions. The signed license's `plan` field decides which features are on.
+
+|  | Studio | Studio Pro |
+| --- | --- | --- |
+| Who | Any shop, no device needed | Shops with an EVCore D1 |
+| Manual diagnosis | Yes | Yes |
+| PDF diagnostic report | Yes | Yes |
+| Work orders, customers, vehicles | Yes | Yes |
+| Tests on the D1, live data, device screen, bus frames, firmware updates | No | Yes |
+| Diagnostic code library in Studio | No | Yes |
+| AI mechanic assistant | No | Yes, when built |
+
+A Pro feature opened on a Studio license shows what it does and how to upgrade; it never starts anything. Changing edition never needs a reinstall.
+
+## Registered devices
+
+Licenses list the serial numbers of the account's registered devices. Studio runs tests only on those devices. Simulators are exempt; their data is always labeled simulated.
+
+Device binding is enforced in `public/core/device.js`: Studio refuses to start a test on an unregistered USB device.
+
+## Purchase to license
+
+The current flow uses Shopify:
+
+1. A customer buys a Studio or Studio Pro license at csharness.com (Shopify checkout).
+2. Shopify sends the paid order to the `shopify-orders` Edge Function (webhook, signed with the store's webhook secret).
+3. The function records the order and creates the license at once if the email has an EVCore account. If not, the grant waits and is applied when that email signs up.
+4. The customer downloads Studio, signs in (or creates the account) with the order's email, and Studio opens in the edition the license gives.
+
+Rules:
+
+- Pre-order with beta access: the buyer gets the current beta at once and the license months start the day they buy. No free trial.
+- Refunds: full refund within 14 days of purchase. Refund a Studio order with **Cancel order** (with a refund) so the cancellation webhook revokes its license. A refund alone does not end it.
+- SKUs decide the license: `EVC-STUDIO-6M` (Studio, 6 months), `EVC-STUDIO-12M` (Studio, 12 months), and `EVC-PRO-12M` (Studio Pro, 12 months). Studio Pro is not for sale yet.
+- Test orders: Shopify test mode licenses only staff accounts.
+
+## Account server setup
+
+The account service runs on Supabase. Setup steps:
+
+1. Create the Supabase project.
+2. Under Authentication > Providers > Email, keep "Confirm email" on.
+3. Under Authentication > URL configuration, set the site URL.
+4. Under Authentication > Emails > Confirm signup, paste the confirmation template and use the subject in its first comment.
+5. Link the `server` folder and apply the schema with `supabase link` and `supabase db push`.
+6. Generate the signing key with `node scripts/license-keys.mjs generate`.
+7. Store the private key as a function secret and deploy the `issue-license` function.
+8. Point Studio at the project with `node scripts/license-keys.mjs server <url> <anon key>`.
+
+A packaged Studio refuses to run until all three settings are present in `desktop/license-config.json`. Development runs (`npm start`) have licensing off.
+
+## Day-to-day: granting licenses
+
+Run these in the Supabase dashboard SQL editor. They are restricted to the service role.
+
+```sql
+-- A Studio subscription (the customer must have created their account first):
+select grant_license('shop@example.com', 'studio', now() + interval '1 month', 'Order 1042, monthly');
+select grant_license('shop@example.com', 'studio', now() + interval '1 year', 'Order 1043, yearly');
+
+-- A D1 purchase: three months of Studio Pro, and the device serial.
+select grant_license('shop@example.com', 'pro', now() + interval '3 months', 'D1 order 1044');
+select register_device('shop@example.com', 'EVC-000123');
+
+-- Refunds or abuse: Studio stops working at its next check, or within 30 days offline.
+select revoke_studio_licenses('shop@example.com');
+```
+
+## Testing without Supabase
+
+`software/evcore-studio/desktop/license-dev-server.mjs` is a local stand-in with the same endpoints and rules. Studio's tests and its desktop smoke test use it. The smoke test creates an account, confirms it on the code screen, grants a license, and checks device binding.

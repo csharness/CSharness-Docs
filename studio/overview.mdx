@@ -1,0 +1,63 @@
+---
+title: "EVCore Studio Overview"
+sidebarTitle: "Overview"
+description: "EVCore Studio is the desktop companion for the EVCore diagnostic device. Learn about its feature areas, connection modes, guided workflow, and current limitations."
+---
+
+EVCore Studio is the desktop companion for the CS Harness EV Diagnostic Brick (EVCore). It runs tests on the device, keeps every result with its work order, vehicle, and customer, and produces the service report for the customer. The device owns test execution and safety; Studio only requests actions and records evidence.
+
+## Feature areas
+
+| Area | Details |
+| --- | --- |
+| **Account** | Sign-in is required, with an account that holds a Studio license. Create account, password reset, and a clear screen for each blocked state. Works offline for 30 days after the last license check. Tests run only on USB devices registered to the account. Only the account and license are online; all records stay on this computer. |
+| **Device screen** | The firmware simulator's own screen, rotary knob, and STOP button: run tests from the device's menus, read results and diagnostic codes, handle a safety stop. With a USB device it mirrors the device's screen (read only). |
+| **Firmware updates** | Every connection to a device checks the account service for newer firmware for its board and shows a notice with release notes, marked required for safety or security fixes. Installing from Studio waits for the bootloader. |
+| **Connections** | In-app demo (synthetic signals and results), firmware simulator (the real EVCore firmware running on this computer with simulated hardware), and USB device (Web Serial with Studio's own port picker). Simulated data is labeled everywhere: on screen, in saved records, and on service reports. |
+| **Guided job** | One screen that walks a job from start to finish: connect, identify the vehicle, verify safe conditions (a checklist confirmed before every test), test, review with findings for the customer, and the service report. |
+| **Work orders** | Create a work order with a new or existing customer and vehicle, make it active, and every completed test links to it automatically. Status, symptom, and technician notes. |
+| **Customers & vehicles** | Contact details, vehicles (serial, battery, motor, controller), and each vehicle's test history across visits, grouped by test so drift is visible. |
+| **Diagnostics** | Test selection, setup confirmation, run and stop, result with measurements against limits. Instrument and safety events are shown separately from findings about the vehicle. |
+| **Reports** | Search and filter every saved test; full detail with device firmware versions; notes; JSON export; archive import and export. |
+| **Service report** | A PDF for the customer: shop details, customer, vehicle, symptom, summary, every test with readings and expected ranges, instrument events, firmware versions, signature line. Simulated data is flagged on the report. |
+| **Tools** | Troubleshooting checklists, before/after comparison, capture analysis, bus frame inspector, live signals (demo only until the firmware streams data). |
+| **Data** | Records are files in the Studio user-data folder, written atomically with the previous version kept. A backup snapshot is taken automatically once a day; Back up now and Restore are in Device & settings. Limits: 5,000 reports, work orders, and customers; 10,000 vehicles. |
+
+## Connection modes
+
+Studio supports three ways to connect, selectable from the connection panel:
+
+1. **In-app demo** — synthetic signals and results for UI exploration and training. No device or firmware is involved. Simulated data is labeled on every screen and report.
+2. **Firmware simulator** — the real EVCore firmware running on this computer with simulated hardware, bridged via `desktop/firmware-sim.cjs`. This is the closest you can get to real device behavior without hardware.
+3. **USB device** — Web Serial with Studio's own port picker. The firmware has no USB CDC stack yet, so this path has not been used with physical hardware, but the port picker and permissions are in place.
+
+## Guided job workflow
+
+The guided job is a single screen that walks a technician through a complete service visit:
+
+1. **Connect** — choose a connection mode and confirm the device is ready.
+2. **Identify the vehicle** — select or create a customer and vehicle.
+3. **Verify safe conditions** — a checklist confirmed before every test.
+4. **Test** — select a test, confirm setup, run, and stop.
+5. **Review** — findings for the customer, with measurements against limits.
+6. **Service report** — generate a PDF with shop details, results, and a signature line.
+
+## Data storage and limits
+
+Records are stored as files in the Studio user-data folder, written atomically with the previous version kept. A backup snapshot is taken automatically once a day. You can also trigger **Back up now** or **Restore** from Device & settings.
+
+Current limits:
+
+- 5,000 reports
+- 5,000 work orders
+- 5,000 customers
+- 10,000 vehicles
+
+## Current limitations
+
+The plan to 1.0.0 is tracked in the [1.0 roadmap](/engineering/roadmap).
+
+- **USB:** the firmware has no USB CDC stack yet, so the USB path has not been used with physical hardware. The port picker and permissions are in place.
+- **Live data:** continuous telemetry and bus streaming exist only in the in-app demo, until the device protocol provides them.
+- **Reports:** test limits are illustrative fixture values until approved profiles exist.
+- **Safety:** the device must enforce every interlock itself. Closing Studio or losing the connection never confirms that outputs are off.

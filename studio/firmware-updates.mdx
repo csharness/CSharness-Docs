@@ -1,0 +1,54 @@
+---
+title: "EVCore Studio Firmware Updates"
+sidebarTitle: "Firmware Updates"
+description: "How EVCore Studio checks for firmware updates on device connection, what required updates mean, and the planned install flow."
+---
+
+EVCore Studio checks for newer firmware every time a device connects. This page covers how the check works, how releases are matched to a device, what required updates mean, and the planned install flow.
+
+## When Studio checks
+
+Studio checks the account service for newer firmware on every connection to a USB device or the firmware simulator. The in-app demo has no firmware, so it is not checked. If Studio is offline, it notes in Device & settings that it could not check.
+
+## How releases are matched
+
+Releases are stored in the account service (Supabase) in the `firmware_releases` table, one row per board and version. Studio calls `firmware_releases_for(board)` with the `board` and `firmware` values the device reports in its `INFO` message.
+
+Versions are `major.minor.patch`, compared numerically. If any release newer than the installed version is marked `required` (a safety or security fix), Studio says the update is required, even when a later optional release is the latest.
+
+## Required updates
+
+A required update is flagged for safety or security fixes. The notice never blocks connecting or testing: device safety never depends on Studio, and a shop working offline must still be able to work. Studio shows the notice with release notes and a required badge.
+
+## Publishing a firmware release
+
+Admins publish releases via SQL functions in the Supabase dashboard:
+
+```sql
+-- Publish an optional release
+select publish_firmware('<board>', '0.2.0', 'Faster phase resistance test. Fixes ...');
+
+-- Publish a required release (safety or security fix)
+select publish_firmware('<board>', '0.2.1', 'Fixes a safety issue in ...', true);
+
+-- Withdraw a bad release
+select withdraw_firmware('<board>', '0.2.1');
+```
+
+The board name must match what the firmware reports exactly.
+
+## Install flow (not yet built)
+
+Installing firmware from Studio waits for the device bootloader (roadmap item S-30, hazard H-15). The planned flow is:
+
+1. Studio downloads the image from the release list.
+2. Studio checks the image hash and signature.
+3. Studio requests `BOOTLOADER` from a safe state.
+4. Studio sends the image to the device over USB.
+5. The device verifies the CS Harness signature before switching slots.
+
+The device's own verification is what makes it secure; Studio's check only catches a bad download early. The bootloader will use A/B image slots with rollback, so power loss or unplugging during an update never leaves a device unusable.
+
+## Device-only customers
+
+Customers who buy only the device get firmware updates through a free updater app that needs no account. It only installs firmware and collects no personal data. It relies on the same device-side signature check as Studio. Because it has no account, the release list (versions, notes, image hashes) will be opened to anonymous reads when the updater is built.

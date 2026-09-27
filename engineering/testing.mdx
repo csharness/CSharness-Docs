@@ -1,0 +1,79 @@
+---
+title: "Test suites and verification gates"
+description: "EVCore runs firmware unit tests, Studio npm tests, firmware-link tests, desktop smoke tests, and a verify script that gates every commit."
+sidebarTitle: "Testing"
+---
+
+EVCore uses a layered test strategy that starts on the host simulator and grows toward hardware-in-the-loop. Every behavior change ships with a test that fails without it, and `scripts/verify.ps1` runs every gate in one command.
+
+## Host test suites
+
+The firmware test suites run against the host simulator. They prove module behavior, safety invariants, and protocol correctness before any hardware exists.
+
+| Suite | File | What it proves |
+| --- | --- | --- |
+| Safety | `tests/safety_tests.c` | Safety manager state machine, latching, reset rules, stale inputs, corrupted state, and driver loss. Includes the generated fault-injection matrix: 5 states x 13 fault sources (65 cases). |
+| Diagnostic | `tests/diagnostic_tests.c` | Single-step sensor diagnostic: limits, interruption, timeout, and recovery. |
+| MVP | `tests/mvp_tests.c` | Integrated runner with the simulated board: all three profiles, every fault and bad-measurement path, profile validation, routing, logs, CAN/serial queues, storage records, supervisor, console protocol including request tags, and versions. |
+| Local screen | `tests/ui_tests.c` | Menus and encoder: navigation, confirmation before START, knob STOP, following USB-started tests and faults, code pages, `SCREEN`, and a 20,000-step random walk checking screen bounds and that outputs are only on during a test (SR-24, SR-25). |
+| Fuzz | `tests/fuzz_tests.c` | Seeded random input to the console parser, record decoder, and report JSON writer, checking safety and memory invariants. Run `fuzz_tests [seed] [iterations]` for deeper searches. |
+| D1 emulator core | `tests/emulator_tests.c` | Emulator operator controls in virtual time: SIM- identity, vehicle conditions, SET limits, STOP during a test, instrument faults, knob, and invalid input. |
+
+## Studio and link tests
+
+EVCore Studio and the firmware communicate over protocol v2. The link tests prove that Studio and the firmware agree on discovery, commands, reports, and error handling.
+
+| Suite | File | What it proves |
+| --- | --- | --- |
+| Studio unit | `software/evcore-studio/tests/*.test.mjs` | Report validation, simulator transport, protocol 2 client (tag matching, timeouts, oversized replies), record import/merge, and workshop tools. |
+| Studio to firmware | `software/evcore-studio/tests/firmware-link.mjs` | Real transport against the real firmware console in `mvp_demo --interactive`: discovery, test run, report, refusal, E-stop, reset, and log. |
+| Studio to D1 emulator | `software/evcore-studio/tests/d1-emulator.mjs` | Serial transport against `build/d1_emulator.exe` over a named pipe in real time: simulated identity, PASS, FAIL with code, STOP latch, knob and screen, instrument fault, and clean exit with outputs off (Windows). |
+| Desktop smoke | `npm run test:desktop` | Packaged Electron window renders, simulated data is labeled, Node is not exposed, core workflows run, accounts and licensing work, the firmware update check fires, and a test starts from the simulated device screen. |
+
+## Running the gates
+
+Run all gates with a single PowerShell command:
+
+```powershell
+.\scripts\verify.ps1
+```
+
+Use `-Quick` to skip CMake and Electron when you only need the fast checks. The script runs:
+
+1. Firmware build with strict warnings (`-Werror`) and undefined-behavior trapping.
+2. All C test suites via `ctest --preset zig`.
+3. Clang static analyzer (`scripts/analyze.ps1`), which must report zero findings.
+4. Layer check (`node scripts/check-layers.mjs`) for upward includes and cycles.
+5. Requirement trace (`node scripts/trace-requirements.mjs`) to confirm every safety requirement has a tagged test.
+6. Studio unit tests (`npm test`).
+7. Firmware-link test (`npm run test:firmware-link`).
+8. Desktop smoke test (`npm run test:desktop`).
+
+## Static gates
+
+Beyond runtime tests, the following gates run on every build:
+
+- **Strict warnings** with `-Werror`
+- **Undefined-behavior trapping** (`-fsanitize=undefined -fsanitize-trap=undefined`)
+- **Clang static analyzer** covering `core`, `deadcode`, `security`, `unix`, `nullability`, and `optin.portability`
+- **Firmware layer check** enforced by `scripts/check-layers.mjs`
+- **Safety requirement traceability** enforced by `scripts/trace-requirements.mjs`
+
+## Test rules
+
+- A behavior change comes with a test that fails without it.
+- Tests that check a shutdown must check the OFF call the driver received, not only the state the firmware reports (SR-12).
+- New safety behavior gets a requirement ID in `safety-requirements.md` and a tagged test.
+- When a test passes on its first run, confirm it can fail: temporarily break the code it covers. The fault matrix, fuzzer, and layer check were all checked this way.
+- Every software defect found in the field gets a regression test (roadmap #56).
+
+## Simulation limits
+
+The simulator models commanded behavior and injected faults, not electrical physics. A passing host test shows the software follows its rules. It does not show the Brick is electrically safe. Timing is virtual: `TICK` advances 10 ms.
+
+## Next stages
+
+1. **Scenario tests** for motor, controller, sensor, and battery faults against the simulator (roadmap phase 2, #41 to #47).
+2. **ARM cross-build** of the portable modules, and later on-target unit tests (#67, #68).
+3. **Hardware-in-the-loop**: the same procedure suite on a real board with known loads and known-good and known-faulty parts (#83, #84).
+4. **Bench measurement** of fault-response time and shutdown ordering (#82), which no host test can prove.

@@ -1,0 +1,93 @@
+---
+title: "EVCore knowledge database schema and tools"
+description: "The EVCore knowledge database stores vehicles, components, connectors, protocols, and fault codes as JSON with provenance, confidence, and validation status, validated by scripts/knowledge.mjs."
+sidebarTitle: "Knowledge Database"
+---
+
+The EVCore knowledge database stores structured engineering knowledge about vehicles, components, connectors, communication protocols, and vendor fault codes. Every entry carries provenance, confidence, and a validation status so nothing ships on guesswork. The database is the source of truth in git; a cloud mirror and a Studio bundle are generated from it.
+
+## Layout
+
+```text
+knowledge/
+  knowledge.json          {"schema_version": 1, "version": "0.1.0"}; bump version to publish
+  vehicles/<id>.json
+  components/<id>.json
+  connectors/<id>.json
+  protocols/<id>.json
+  fault-codes/<id>.json   one error-code list per vendor, component family, or protocol
+  articles/<slug>.md      developer knowledge base (internal; never ships in Studio)
+  examples/               fictional entries for tests and templates; never shipped or published
+  diagnostic-codes.json   EVCore's own result codes (scripts/gen-codes.mjs), a separate library
+```
+
+Ids are lower-case words joined by dashes and must match the file name. References between entries use ids and must resolve.
+
+## Fields every entry has
+
+| Field | Description |
+| --- | --- |
+| `id`, `title` | Required identifiers |
+| `aliases` | Other names: model codes, marketing names, part numbers |
+| `notes` | Free text, up to 4000 characters |
+| `provenance.status` | `draft` (internal only), `reviewed` (checked by a second person; ships), `validated` (needs a manufacturer document or bench test; ships) |
+| `provenance.confidence` | `unverified`, `low`, `medium`, `high` (a draft cannot be high) |
+| `provenance.sources[]` | `kind` (`manufacturer-doc`, `bench-test`, `reverse-engineering`, `field-observation`, `technician`, `community`), `ref` (document, URL, capture file, person), optional `date` (YYYY-MM-DD) |
+
+## Entry kinds
+
+### Vehicle
+
+`make`, `model`, `category` (`e-bike`, `e-moto`, `e-scooter`, `other-lev`), `years` `{from, to?}`, `components[]` `{component, role?}`, `protocols[]`.
+
+### Component
+
+`type` (`motor`, `controller`, `battery`, `bms`, `display`, `throttle`, `brake-sensor`, `pas-sensor`, `torque-sensor`, `thermistor`, `charger`, `lights`, `other`), `manufacturer`, `model`, `specs[]` `{name, value, unit?}`, `connectors[]`, `protocols[]`, `fault_codes[]`.
+
+### Connector
+
+`family`, `pin_count`, `pins[]` `{pin, signal, wire_color?, evidence[], confidence}`. Evidence is one or more of `pinout-doc`, `continuity`, `electrical`, `protocol`, `component-identity`, `wire-color`. A pin known from wire colour alone must be `unverified`. Use signal `unknown` rather than guessing.
+
+### Protocol
+
+`transport` (`can`, `uart`, `rs485`, `lin`, `other`), `settings` (`bitrate`, `baud`, `id_bits` 11 or 29, and other bus settings), `detection[]` (how to recognize it on a bus), `checksum` (notes), `messages[]`:
+
+| Message field | Description |
+| --- | --- |
+| `id` | Upper-case hex (`0x101`, `0x18FF50E5`); for UART, the frame header or command byte |
+| `name`, `direction`, `length` (bytes), `period_ms`, `notes` |  |
+| `status` | `hypothesis`, `observed`, or `verified` (needs a manufacturer document or bench test on the protocol) |
+| `signals[]` | `name`, `start_bit`, `length` (bits), `byte_order` (`little` or `big`, DBC numbering), `signed`, `scale`, `offset`, `unit`, `values` (raw number to label), `status` |
+
+DBC bit numbering: for `little` the start bit is the least significant bit; for `big` it is the most significant bit, numbered byte x 8 + bit with bit 7 the top bit of each byte.
+
+### Fault codes
+
+`vendor`, `applies_to_components[]`, `applies_to_protocols[]`, `codes[]` `{code, title, meaning?, checks[]?, status}` with `status` as for messages. `code` is written as the display or tool shows it (`E10`, `21`, `P0A1F`).
+
+## Knowledge tool
+
+`scripts/knowledge.mjs` is the command-line interface for the knowledge database. It validates entries, builds the Studio bundle, searches, scaffolds drafts, decodes CAN captures, and publishes to the cloud mirror.
+
+```bash
+node scripts/knowledge.mjs check              # validate knowledge/ and check the Studio bundle is current
+node scripts/knowledge.mjs build              # validate and regenerate the Studio bundle
+node scripts/knowledge.mjs search <text>      # search every entry, drafts included
+node scripts/knowledge.mjs show <kind>/<id>   # print one entry
+node scripts/knowledge.mjs new <kind> <id>      # create a draft entry from the template
+node scripts/knowledge.mjs decode <candump.log> [--id 0x123]  # decode a capture against every known CAN protocol
+node scripts/knowledge.mjs publish            # publish this version to the cloud mirror
+```
+
+Use `--root <dir>` to work with another database that has the same layout (for example `knowledge/examples`).
+
+## Publishing and shipping
+
+- **Source of truth is git.** Every change is reviewed, versioned, and checked by `scripts/knowledge.mjs check` (a `verify.ps1` gate) before it reaches a build.
+- **Cloud mirror.** Each version is published in full to Supabase (`knowledge_releases`, `knowledge_entries`, `knowledge_articles`) by the `knowledge` workflow when `knowledge/` changes on main. A version is immutable. Readable only by CS Harness staff.
+- **Studio ships it; no updates between releases.** `scripts/knowledge.mjs build` generates `software/evcore-studio/public/knowledge.js`, and the gate fails if it is out of date, so every Studio release carries the database as of its build. Installed Studio does not download knowledge on its own.
+- **Drafts stay internal.** Only entries with status `reviewed` or `validated` ship in Studio. Draft entries and articles stay in git and the cloud. References to entries that do not ship are removed from the bundle.
+
+## Versions
+
+`knowledge.json` `version` follows MAJOR.MINOR.PATCH: PATCH for corrections, MINOR for new entries, MAJOR when the schema changes incompatibly (with `schema_version`). A published version is never changed; publish a new one. Studio shows the version it ships in Settings.

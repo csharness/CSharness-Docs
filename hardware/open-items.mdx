@@ -1,0 +1,38 @@
+---
+title: "Open Hardware Integration Items"
+sidebarTitle: "Open Items"
+description: "Hardware integration decisions still pending for EVCore, with their firmware consequences, from MCU selection through relay topology and measurement ratings."
+---
+
+The EVCore firmware is built as portable C11 with host tests and simulators. No schematic, BOM, CubeMX `.ioc`, CubeIDE project, STM32 HAL/LL drivers, or FreeRTOS configuration is present in the repository. The EVCore D1 Rev 0.9 hardware handoff adds evidence but does not close these items. This page lists every open hardware decision and its firmware consequence.
+
+## Open hardware decisions
+
+| Needed hardware decision | Firmware consequence |
+| --- | --- |
+| Exact MCU/package and CubeMX configuration | Peripheral and pin bindings; no assignments made yet |
+| STOP and latch signals, polarity, and independent shutdown circuit | Board input normalization and hardware shutdown verification |
+| Master enable and contact/output feedback availability | Driver sequencing and detection of failed power removal |
+| Rail enable polarity, power-up defaults, and permitted combinations | Real output mapping and configuration validation |
+| Voltage/current limits, ADC range, scaling, calibration | Overvoltage/overcurrent input production and measurement validity |
+| Relay topology and settling/break-before-make requirements | Routing validation and safe transitions |
+| Adapter identity and safe stimulus limits | Profile/adapter compatibility checks |
+| Maximum fault-response time and watchdog/reset behavior | Safety service deadline and independent supervision |
+| External-energy permission and contact-safe shutdown ordering | Do not equate local output OFF with a safe Kelvin relay transition |
+| Independent passive phase sensing versus switched Kelvin paths | Back-EMF observation without hot-switching measurement contacts |
+| CubeMX/CubeIDE and HAL versus LL choice, and how generated code is integrated | Board-binding layer structure and build integration |
+| LM317 current-source control, ranges and measurement feedback | Kelvin excitation control and actual-current validation |
+| CAN transceiver enable/standby and termination control | CAN driver power states and termination capability flag |
+| RS-485 DE/RE behavior, termination and biasing | Direction switching timing and bus configuration capability |
+| UART voltage levels and level translation | Selectable 3.3 V/5 V serial capability, not bare MCU pins |
+| USB-C role, power and data architecture, including isolation | USB stack, descriptors and power negotiation behavior |
+| Back-EMF front-end scaling, clamp behavior and safe maximum | Passive EMF measurement range and over-range handling |
+| DUT measurement rating: batteries up to 96 V, inputs rated 120 V DC for headroom (owner, 2026-09-24). A full 96 V-class pack reaches about 109-110 V, so confirm the ~10 V transient margin. Still open: the measurement-category confirmation, and a review of the Rev 0.9 handoff (sized for 84 V-class packs) against it: dividers, clamps, isolation, relay contacts, connectors, clearances | Over-range limits and UI warnings come from the reviewed design via the board definition; 120 V is a rating, not an ADC full scale or trip threshold |
+| Nonvolatile memory for calibration, manufacturing data and logs | Record store transport, sizing and wear strategy |
+| Meaning of master current relay versus generic output permission | Separate physical Kelvin master from 5 V/12 V sensor rail controls |
+
+## Current status
+
+These are questions for hardware integration, not blockers for host logic tests. The portable MVP now provides board callbacks, event logging, a configurable heartbeat supervisor, and sequence simulation. Real board drivers, hardware watchdog service, reset-cause acquisition, and persistent storage remain pending.
+
+No numeric hardware limits or wiring choices are inferred from demonstration values. The supplied brief's request to create the first module was reconciled with the safety and sensor modules already present, rather than replacing them.

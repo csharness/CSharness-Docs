@@ -1,0 +1,58 @@
+---
+title: "EVCore Firmware Safety Requirements"
+sidebarTitle: "Requirements"
+description: "Traceable firmware safety requirements for EVCore, mapped to hazard IDs and proven by tagged tests, covering the safety manager, test sequencing, fault records, and local UI."
+---
+
+EVCore firmware safety requirements are roadmap item 7. Each requirement traces to hazards in the [Hazard Analysis](/safety/hazard-analysis) and is proven by tests tagged with its ID (for example `/* SR-02 */`) in `tests/*.c`. The `node scripts/trace-requirements.mjs` script prints the requirement-to-test matrix. It fails if a requirement has no test, or if a test cites an ID not listed here. `scripts/verify.ps1` runs it.
+
+These requirements cover the firmware's own behavior on the host. They do not replace the independent hardware controls listed in the hazard analysis.
+
+## Safety manager (`evcore_safety.c`)
+
+| ID | Requirement | Hazards |
+| --- | --- | --- |
+| SR-01 | Initialization commands every output OFF before any other action, including when initialization is rejected. | H-01 |
+| SR-02 | Any unhealthy safety input (STOP, latch, external voltage, overcurrent, overvoltage, watchdog, measurement, routing, configuration, profile, self-test) moves any state to FAULT and commands OFF in the same service call. Simultaneous faults accumulate. | H-01, H-04, H-08 |
+| SR-03 | Faults latch: clearing the cause does not leave FAULT, and outputs stay OFF. | H-14 |
+| SR-04 | Fault reset succeeds only when every input is healthy and fresh. It returns to DISARMED with outputs OFF and never arms or restarts anything. | H-14 |
+| SR-05 | Arming requires healthy, fresh inputs, and arming alone never energizes an output. | H-01 |
+| SR-06 | Outputs are granted only from ARMED. Changing an active output mask is refused, and disabling outputs revokes arming. | H-05 |
+| SR-07 | A request containing unknown output bits is a configuration fault and commands OFF. | H-05 |
+| SR-08 | Inputs older than the configured age, or dated in the future, cause a STALE fault and OFF. Age arithmetic stays correct across timer rollover. | H-10 |
+| SR-09 | A missing input snapshot or an invalid configuration (zero or excessive input age) is a fault and cannot authorize output. | H-01 |
+| SR-10 | Corrupted internal state (unknown state value, outputs energized while not OFF-permitted, invalid sequence data) latches an INTERNAL fault and commands OFF. | H-01 |
+| SR-11 | If the output driver callback is lost, the manager latches an INTERNAL fault and does not report that an OFF command was sent. | H-01 |
+| SR-12 | Every shutdown is observable as an actual driver OFF call, which tests check directly rather than inferring it from reported state. | H-01, H-02 |
+
+## Test sequencing (`evcore_app.c`, `evcore_control.c`, `evcore_console.c`)
+
+| ID | Requirement | Hazards |
+| --- | --- | --- |
+| SR-13 | A safety fault during a test ends it as UNKNOWN (safety interruption) with outputs OFF. Releasing STOP or resetting the fault never resumes the interrupted test. | H-08, H-14 |
+| SR-14 | Relay routes change only after OFF is confirmed. If OFF cannot be confirmed, the test reports a safety interruption and does not move to another route or energize. | H-02, H-03 |
+| SR-15 | A test step uses at most one source with master permission. Passive back-EMF steps never request an output. Invalid profiles are rejected before anything is energized. | H-04, H-05, H-06 |
+| SR-16 | An invalid, flagged, stale, wrong-channel, or non-finite measurement gives UNKNOWN, never PASS or FAIL. | H-10, H-12 |
+| SR-17 | Local and remote (USB) commands use one control path. START is refused while a test runs; STOP is always accepted. | H-09, H-16 |
+| SR-18 | Malformed, oversized, or damaged-transport commands are rejected without starting anything. | H-16 |
+| SR-19 | A measurement timeout ends the test as UNKNOWN with outputs OFF. | H-10 |
+
+## Fault records (`evcore_fault.c`, `evcore_app.c`, `evcore_safety.c`)
+
+| ID | Requirement | Hazards |
+| --- | --- | --- |
+| SR-20 | Every test that ends without a conclusion carries at least one structured fault record naming its cause (code, category, severity, action, source, time, evidence). A clean run carries none. | H-12, H-13 |
+| SR-21 | Instrument, safety, configuration, internal, and operator causes are recorded as faults, never as findings about the device under test. An unusable measurement is an instrument fault, not a safety trip. Once a test has ended, later events never change its report. | H-12 |
+| SR-23 | Diagnostic codes describe the vehicle only for a FAIL result. A test without a conclusion is reported only with instrument (E) codes, so an instrument problem is never shown on the device or in reports as a vehicle code. | H-12, H-13 |
+| SR-22 | The safety manager records each fault episode (time, accumulated faults, state it started from) and the evidence for each recovery (faults cleared, healthy input snapshot time). | H-01, H-14 |
+
+## Local screen (`evcore_ui.c`)
+
+| ID | Requirement | Hazards |
+| --- | --- | --- |
+| SR-24 | The local screen starts a test only from an explicit confirmation page, whose cursor starts on Cancel, and only through the shared control path. While a test runs, pressing or holding the knob requests STOP. | H-17, H-16 |
+| SR-25 | The local screen follows the device: a latched fault replaces any page with the fault page, which only a reset accepted by the safety manager leaves; a test started over USB is shown as running. Every page shows the safety state and whether outputs are on. | H-17, H-08 |
+
+## Applicable standards
+
+The proposed standards that shape these requirements are documented in [Applicable Standards](/engineering/decisions). The key choices are IEC 61010-1 for general electrical safety, IEC 61010-2-030 for measuring circuits, and IEC 61326-1 for EMC. Functional safety practices follow IEC 61508 discipline without pursuing full certification. See the decision record for market-dependent items and open questions.

@@ -1,0 +1,48 @@
+---
+title: "EVCore Hazard Analysis (Draft FMEA)"
+sidebarTitle: "Hazard Analysis"
+description: "Draft FMEA of hazards the EVCore diagnostic brick can cause or fail to prevent during DUT testing, with severity ratings, firmware controls, and required hardware mitigations."
+---
+
+This draft hazard analysis covers hazards the EVCore diagnostic brick can cause or fail to prevent while testing a device under test (DUT). Hazards include energizing outputs, routing relays, injecting Kelvin current, and measuring circuits that may carry external energy from a battery or a spinning motor. Customer-facing misdiagnosis is included because a wrong conclusion can lead to an unsafe repair.
+
+Hardware controls listed here are proposals until the schematic confirms them. Severity ratings are qualitative until rated measurement voltage and category are set. See [Applicable Standards](/safety/requirements) and [Hardware Open Items](/hardware/open-items) for related decisions.
+
+## Severity scale
+
+| Rating | Meaning |
+| --- | --- |
+| S4 | Injury, fire, or destroyed DUT battery |
+| S3 | Damage to the DUT or the Brick |
+| S2 | Wrong diagnostic conclusion |
+| S1 | Lost data or inconvenience |
+
+Firmware can reduce these hazards but must never be the only protection. Every S4 hazard needs an independent hardware control.
+
+## Hazards
+
+| ID | Hazard / failure mode | Cause | Effect | Sev | Current firmware control | Hardware control needed | Gap / roadmap |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| H-01 | Output left energized after a fault | Firmware hang, crash, or missed fault | DUT or operator exposed to a live rail | S4 | `EV_Safety` trips to FAULT and commands OFF on any unhealthy input; stale-input fault if the snapshot ages out | Hardware latch and watchdog that remove outputs without firmware (TPS3808, SN74LVC1G74 concept) | Watchdog driver #71; measured response time #82 |
+| H-02 | Output commanded OFF but still live | Welded relay or failed switch | Hot DUT after "test complete" | S4 | `off_confirmed()` checks board feedback before routing and at finish; failure reports SAFETY instead of continuing | Output and contact feedback signals | Feedback availability is an open item; #75, #76 |
+| H-03 | Relay switched while current flows or external voltage is present | Wrong sequence; external energy from the DUT | Contact damage, arcing, wrong reading | S3-S4 | Routing opens only after OFF is confirmed, waits the configured break time, applies the route, waits settling | Approved shutdown ordering; hot-switch restrictions | Gap 2 in [hardware baseline](/hardware/baseline); #76 |
+| H-04 | Kelvin current injected into an energized circuit | Battery connected or motor spinning during resistance test | Current source damaged, DUT damaged, false resistance | S4 | `hv_conflict` input faults the safety manager; back-EMF profiles cannot request outputs | Independent external-voltage sensing | Operation-specific permission #51, #52 |
+| H-05 | Two sources enabled at once, or a source not allowed by the adapter | Profile error or corrupted profile | Rail fighting, DUT damage | S3 | Profile validation allows one source per step with master permission; board `configure` callback is the final capability check; unknown output bits fault | Rail hardware that cannot back-feed | Adapter capability maps #23, #50 |
+| H-06 | Stimulus above DUT rating | Wrong profile or adapter; bad limits | DUT sensor or controller damaged | S3 | Limits come from copied, validated profiles; board rejects unsupported configuration | Current-limited rails (TPS2553, TPS1H200A) | Approved limits pending; knowledge provenance #19 |
+| H-07 | Measuring input over its 120 V DC rating, or a technician touching a live 120 V circuit (above the 60 V DC hazardous-live threshold) | Pack above rated voltage, wrong adapter, exposed harness contacts | Brick damage, shock risk at inputs | S4 | Non-finite or out-of-range samples produce UNKNOWN, not a conclusion | Input protection and isolation; rated measurement category | Rating is an open item (decision 0001) |
+| H-08 | STOP pressed but not acted on | Stuck input, polarity error, slow loop | Test continues after operator demands stop | S4 | STOP latches FAULT, clears outputs; reset refused while STOP is held; tests verify the OFF callback | STOP wired into the hardware latch, not only a GPIO | STOP polarity open; #74 |
+| H-09 | Studio loses the link during a remote-started test | Cable pulled or host crash | Test runs unattended | S3 | Device owns sequencing and safety; Studio shows "state unconfirmed" on timeout | Local STOP on the device | Host lease #58 |
+| H-10 | Stale or future-dated measurement accepted | Timestamp bug or clock rollover | Wrong PASS/FAIL | S2 | Sample age checked with rollover-safe arithmetic; stale, future, and pre-settling samples give UNKNOWN | — | Settling detection #36 |
+| H-11 | Corrupted calibration or profile | Flash corruption or bad upload | Wrong scaling, wrong limits, possibly unsafe stimulus | S3-S4 | CRC-checked records with version, type, and length; calibration validity checks | — | Sanity bounds #37; two-slot store #38 |
+| H-12 | Instrument fault reported as a DUT failure | Failed ADC channel or relay reads as bad motor | Good part replaced, real fault missed | S2 | Invalid measurements give UNKNOWN rather than FAIL, with an instrument-category fault record; Studio says the result is not about the component (SR-20, SR-21) | Self-test of measurement paths | Self-test #55; result model #28 |
+| H-13 | Hypothesis presented as confirmed diagnosis | Over-confident interpretation | Wrong repair | S2 | Studio wording avoids certainty ("does not establish a winding fault") | — | Result model with confidence #28 |
+| H-14 | Test resumes after fault reset without operator intent | Reset treated as restart | Unexpected energization | S4 | Reset never restarts; START authorizes only one bounded sequence; interrupted sequences cannot resume | — | Covered by existing tests; to be traced in #7 |
+| H-15 | Firmware update leaves a half-written image | Power loss during update | Brick unusable or in unknown state | S3 | Bootloader handoff only from a safe state; no update transport exists yet | Boot ROM recovery | A/B slots and signing #98 |
+| H-16 | Unauthorized command over USB | Malicious or buggy host software | Unwanted energization | S3 | Commands go through the same safety permission path as local controls; interlocks cannot be bypassed from USB | — | Threat model #64 |
+| H-17 | Test started from the local screen by accident, or the screen hides a fault or a live output | Knob bumped or pressed twice; screen out of step with the device | Unexpected energization; operator believes outputs are off | S3 | `evcore_ui`: START only from a confirmation page whose cursor starts on Cancel; a press or hold during a test requests STOP; the screen follows faults and tests started over USB, and always shows the safety state and output state | Hardware STOP independent of the UI | Display and encoder drivers, debounce timing #95 |
+
+## Follow-ups
+
+- Item 7 turns the firmware controls above into numbered safety requirements (SR-xx) that trace back to these hazard IDs, each proven by named tests.
+- Hardware-engineer review: confirm or replace each hardware control, and add hazards specific to the final schematic (for example grounding and isolation between USB, CAN, and the DUT battery).
+- Re-rate severities once the rated measurement voltage and category are set.

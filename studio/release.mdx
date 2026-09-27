@@ -1,0 +1,88 @@
+---
+title: "EVCore Studio Packaging and Releases"
+sidebarTitle: "Releases"
+description: "How EVCore Studio is packaged, built, and released. Covers the packaging script, portable zip, CI artifacts, and the license-config.json requirement."
+---
+
+EVCore Studio is built and released as a portable Windows installer. This page covers the packaging script, what the build produces, how releases are published, and the requirements for a working release build.
+
+## Packaging script
+
+`scripts/package-studio.ps1` (from the repository root) performs the full build:
+
+1. Builds and tests the firmware (`scripts/run-all.ps1 -TestsOnly`).
+2. Builds the customer installer with electron-builder. The output goes to `dist/` by default, or to a local temp folder if the project is inside OneDrive (to avoid sync locks).
+3. Runs the desktop smoke test against the packaged `EVCore Studio.exe`, which checks that it offers no simulation.
+4. Produces `dist/EVCore-Studio-<version>-win-x64.zip`.
+
+The script also supports Microsoft cloud code signing (Azure Trusted Signing) when the environment variables are set:
+
+- `AZURE_SIGNING_ENDPOINT`
+- `AZURE_SIGNING_ACCOUNT`
+- `AZURE_SIGNING_PROFILE`
+- `AZURE_PUBLISHER_NAME`
+
+Plus secrets:
+
+- `AZURE_TENANT_ID`
+- `AZURE_CLIENT_ID`
+- `AZURE_CLIENT_SECRET`
+
+If these are not present, the build is unsigned.
+
+## What the build produces
+
+| File | Purpose |
+| --- | --- |
+| `EVCore-Studio-Setup-<version>.exe` | NSIS installer, x64, per-user install without administrator rights |
+| `EVCore-Studio-Setup-<version>.exe.blockmap` | Blockmap used by auto-update |
+| `latest.yml` | Update manifest with version and SHA-512 |
+
+The installer is portable: unzip and run. Uninstalling keeps the shop's records and backups in `%APPDATA%\EVCore Studio`.
+
+## Customer builds vs internal testing
+
+Every GitHub release is a customer release. Customer builds exclude the in-app demo and the firmware simulator (`extraMetadata: evcoreBuild: customer` in `electron-builder.yml`). Internal testing, with the demo and the firmware simulator, runs from the source code (`npm start` in `software/evcore-studio`, or `npm run package:win` for a local unpacked build). Nothing internal is ever published to the releases repository.
+
+## CI artifacts
+
+Every push to GitHub produces the same zip as a CI artifact via the `release-studio` workflow. Pushing a tag `studio-vX.Y.Z` runs the full build in CI, signed when configured, and keeps the installer as a workflow artifact. The workflow never publishes automatically.
+
+## Publishing a release
+
+After local build and test:
+
+1. Bump `version` in `software/evcore-studio/package.json`.
+2. Add a `## X.Y.Z` section at the top of `CHANGELOG.md` with the release notes users will see.
+3. Build and test locally with `scripts/package-studio.ps1`.
+4. Install that installer on a test computer and check it, including updating from the previous version with records in place.
+5. Publish with `scripts/publish-studio.ps1 -Version X.Y.Z`.
+
+The publish script:
+
+- Publishes the tested installer in `dist/` as `vX.Y.Z`.
+- Refuses a build that carries the simulator.
+- Refuses an unsigned installer unless `-AllowUnsigned` is given.
+
+## Release hosting
+
+Installers and update manifests live in the public repository `csharness/evcore-studio-releases` (releases only, never source code). The website download link points to:
+
+```text
+https://github.com/csharness/evcore-studio-releases/releases/latest/download/EVCore-Studio-Setup.exe
+```
+
+Studio's update feed is configured in `software/evcore-studio/desktop/update-config.json`. The updater checks the feed 30 seconds after start and every 6 hours, downloads new versions in the background, and installs only when the user chooses **Restart and update** or quits Studio. The page refuses to restart while a test is running.
+
+## license-config.json requirement
+
+A release build needs the account server settings in `desktop/license-config.json`. Until they are filled in, the packaged app opens on a "cannot sign in" screen. `npm start` has licensing off.
+
+To point Studio at the project:
+
+```bash
+node scripts/license-keys.mjs server https://<project-ref>.supabase.co <anon-key>
+node scripts/license-keys.mjs check
+```
+
+A packaged Studio refuses to run until all three settings are present.

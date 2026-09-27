@@ -1,0 +1,83 @@
+---
+title: "EVCore firmware coding standard"
+description: "The EVCore firmware coding standard borrows direction from MISRA C:2012 and SEI CERT C, enforced by strict builds, static analysis, and undefined-behavior trapping."
+sidebarTitle: "Coding Standard"
+---
+
+The EVCore firmware coding standard applies to `firmware/`, `simulation/`, and `tests/`. It borrows direction from MISRA C:2012 and the SEI CERT C coding standard. It is not a claim of MISRA compliance. Formal compliance would require a qualified checker, a guideline enforcement plan, and approved deviation records, which becomes worthwhile once the STM32 project and production toolchain exist.
+
+## Automatically enforced gates
+
+| Gate | Command | Enforces |
+| --- | --- | --- |
+| Strict build | `scripts/run-all.ps1`, `cmake --build --preset zig` | C11, `-Werror` with the warning set below |
+| Undefined behavior | Same builds | `-fsanitize=undefined -fsanitize-trap=undefined`: signed overflow, invalid shifts, misaligned or null access, and similar faults stop the test program |
+| Static analysis | `scripts/analyze.ps1` | Clang analyzer: `core`, `deadcode`, `security`, `unix`, `nullability`, `optin.portability`; any finding fails |
+| Tests | `ctest --preset zig` or the run scripts | Behavioral assertions for each module |
+| Fault-injection matrix | `tests/safety_tests.c` | Every safety state x every fault source (65 generated cases) |
+| Fuzzing | `build/fuzz_tests.exe [seed] [iterations]` | Seeded random and mutated input to the console parser, record decoder, and report JSON writer; checks safety and memory invariants |
+| Requirement trace | `node scripts/trace-requirements.mjs` | Every safety requirement in `safety-requirements.md` has a tagged test |
+| Layering | `node scripts/check-layers.mjs` | No upward includes or include cycles between firmware layers; firmware never includes simulator or test code |
+
+## Warning set
+
+The strict warning set is kept identical in `CMakeLists.txt` and `scripts/run-safety.ps1`:
+
+```text
+-Wall -Wextra -pedantic -Wconversion -Wsign-conversion -Wshadow -Wstrict-prototypes
+-Wmissing-prototypes -Wcast-qual -Wundef -Wdouble-promotion -Wfloat-equal -Wswitch-enum
+-Wimplicit-fallthrough -Wvla -Wwrite-strings -Wformat=2 -Wnull-dereference -Wcast-align
+-Wpointer-arith -Wbad-function-cast
+```
+
+With Clang/Zig, these are also enabled:
+
+```text
+-Wcomma -Wmissing-variable-declarations -Wunreachable-code
+```
+
+The sanitizer runs only in host builds. The UB it catches is still UB on the MCU, which is why host tests matter. The ARM build will use its own flag set.
+
+## Types and arithmetic
+
+- Use fixed-width types (`uint32_t`, `int16_t`) for anything with a hardware or protocol width. Use `bool` for truth values.
+- Bitmasks are unsigned: `#define EV_OUT_5V ((uint32_t)1u << 0)`. Do not use enumerators for masks: enumeration constants are `int`, so `~mask` would be a signed operand.
+- No implicit narrowing, sign changes, or float-to-double promotion. Write the cast where a conversion is intended.
+- Never compare floating-point values with `==`/`!=` in firmware. Use range or tolerance checks, for example `fabsf(gain) < FLT_MIN` to reject a zero gain.
+- Check every `float` input with `isfinite` before using it.
+- Time uses `uint32_t` milliseconds. Compare ages as `(uint32_t)(now - then)` so the check still works when the counter rolls over.
+
+## Control flow
+
+- A `switch` on an enum lists every enumerator. A `default` is still required and must fail safe (OFF, UNKNOWN, or a fault), because stored or received values can be out of range.
+- No recursion, no `goto`, no variable-length arrays, no `setjmp`/`longjmp`.
+- Loops have a fixed upper bound tied to an array size or a configured limit.
+
+## Memory and interfaces
+
+- No dynamic allocation (`malloc`/`free`) in firmware. State lives in caller-owned structs, and queues are fixed-size ring buffers.
+- Public functions reject null pointers and out-of-range arguments and report failure through their return value. They must not assume a valid caller.
+- Internal functions and data are `static`. Every external function has a prototype in the module header.
+- Buffer writes check the remaining capacity before writing. Formatted output goes through a function carrying a `printf` format attribute so every call is type-checked.
+- Hardware access goes only through board callbacks. Core logic never names a pin, peripheral, or register.
+
+## Safety behavior
+
+- The default and error state is outputs OFF. Any unexpected state, invalid measurement, or missing configuration de-energizes and reports why.
+- Safety-relevant decisions are testable on the host, and tests check that the OFF command was actually issued, not just what state was reported.
+
+## Naming and layout
+
+- Public identifiers use the `EV_` prefix with module-based CamelCase (`EV_SafetyArm`). Macros and enumerators are upper case (`EV_FAULT_STOP`).
+- Units go in names or comments: `_ms`, `_mv`, `_ma`, `_ohms`, `_hz`.
+- Files are UTF-8 with LF line endings (enforced by `.gitattributes`). C sources use 4-space indentation (`.editorconfig`).
+
+## Recorded deviations
+
+| Deviation | Scope | Rationale |
+| --- | --- | --- |
+| `-Wno-float-equal` | `tests/*.c` only | Tests assert exact results of deterministic arithmetic, such as `frequency == 100`. |
+| Clang checker `security.insecureAPI.DeprecatedOrUnsafeBufferHandling` disabled | `scripts/analyze.ps1` | It asks for C11 Annex K (`memset_s` etc.), which is optional and absent from embedded newlib. Sizes are checked explicitly instead. |
+| `vsnprintf` with a non-literal format | `evcore_report.c` `append()` | The wrapper carries a format attribute, so each call site is checked instead. |
+
+Add a row to the deviation table, with its rationale, before introducing any new exception.

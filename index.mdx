@@ -1,0 +1,39 @@
+---
+title: "EVCore: Portable C11 EV Diagnostic Firmware and Studio"
+sidebarTitle: "Overview"
+description: "EVCore is the CS Harness EV Diagnostic Brick: portable C11 firmware with host simulation and EVCore Studio, an Electron desktop app for diagnosing e-bikes, e-motos, scooters, and other LEVs."
+---
+
+EVCore is the CS Harness EV Diagnostic Brick. It combines portable C11 firmware for a handheld diagnostic device with EVCore Studio, an Electron desktop application that technicians use to diagnose e-bikes, e-motos, scooters, and other light electric vehicles (LEVs). The firmware runs safety checks, measurement sequences, and diagnostic tests locally on the device. EVCore Studio connects over USB-C to request tests, record results, and produce service reports.
+
+The current workspace is a host-executable firmware foundation, not a flashable or electrically qualified STM32 product. All builds run on Windows with Zig 0.13, Clang, or GCC. The simulator provides deterministic virtual hardware so you can run the full safety state machine, sensor diagnostics, and motor measurement sequences without a physical board.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build the firmware and run EVCore Studio in minutes
+  </Card>
+
+  <Card title="EVCore Studio" icon="desktop" href="/studio/overview">
+    Desktop companion for test control, records, and service reports
+  </Card>
+
+  <Card title="Safety Manager" icon="shield" href="/firmware/safety-manager">
+    Latched-fault safety state machine and output permission
+  </Card>
+
+  <Card title="Host Protocol" icon="code" href="/firmware/host-protocol">
+    Protocol v2 request tags, replies, and device/desktop boundary
+  </Card>
+
+  <Card title="Hardware Baseline" icon="cpu" href="/hardware/baseline">
+    D1 Rev 0.9 provisional hardware and open integration items
+  </Card>
+
+  <Card title="Testing" icon="vial" href="/engineering/testing">
+    Host-runnable suites, verification scripts, and coverage
+  </Card>
+</CardGroup>
+
+<Note>
+  The supplied EVCore D1 hardware handoff Rev 0.9 is the current **provisional** baseline. Hardware may change. STM32H743 peripheral drivers and FreeRTOS integration are not implemented yet, and the firmware is **not yet a flashable STM32 image**.
+</Note>

@@ -1,0 +1,63 @@
+---
+title: "EVCore architecture decisions (ADR 0001–0009)"
+description: "Summary of accepted architecture decisions covering standards, scheduling, accounts, firmware updates, AI assistant, Studio editions, knowledge database, purchase flow, and customer feedback."
+sidebarTitle: "Decisions"
+---
+
+EVCore records architecture decisions as numbered records in `docs/decisions/`. Each decision captures the context, options considered, and the accepted path. The records below summarize ADR 0001 through 0009.
+
+## 0001: Applicable product standards
+
+**Status:** Proposed. The voltages are set (batteries up to 96 V, inputs rated 120 V DC), but the owner's target markets and a compliance review are still pending.
+
+The proposed standard set covers electrical safety (IEC 61010-1 and IEC 61010-2-030), EMC (IEC 61326-1), and functional-safety practices drawn from IEC 61508 without claiming full certification. The Brick is classified as bench and handheld electrical test and measurement equipment, not as a vehicle system, so ISO 26262 does not apply. The 120 V DC rating means the measuring terminals are treated as hazardous live under IEC 61010-1, which drives insulation, clearance, and connector requirements in hardware. The Rev 0.9 handoff was sized for 84 V-class packs, so dividers, clamps, isolation, relay contacts, and connectors need review against the 120 V rating plus transient margin.
+
+## 0002: Scheduler and task structure
+
+**Status:** Accepted (option A). Roadmap item 16.
+
+The firmware uses a cooperative, time-triggered main loop (option A) rather than FreeRTOS (option B) or ThreadX (option C). The safety service runs at a fixed period, fast safety inputs are captured in interrupt context with timestamps, and slow variable work (USB, report formatting, display, CAN capture, flash logging) is drained within a time budget. This matches the current non-blocking, bounded code with no changes. The decision may be revisited only when a measured time-budget overrun appears (for example from the display or flash logging), and the revisit must be recorded here. Independent hardware must still remove outputs if firmware stops (hazard H-01).
+
+## 0003: Accounts, licensing, and on-device diagnostic codes
+
+**Status:** Accepted 2026-09-24. Implemented; waiting on owner actions to go live.
+
+Studio requires a CS Harness account and a signed offline license. The license (account ID, plan, device serials, issued and expiry times) is signed with an Ed25519 private key that exists only on the server. Studio verifies the signature with a built-in public key, so it works offline for 30 days and cannot be fooled by an edited file. Device safety, the local screen, and diagnostic codes never depend on Studio, the server, or an account. A lapsed license stops Studio from starting tests; it never changes device behavior.
+
+Diagnostic codes for vehicle findings are separate from instrument and safety fault codes, so an instrument problem is never shown as a vehicle code. The library is data (`knowledge/diagnostic-codes.json`), generated into firmware tables and bundled with Studio. Code text is marked draft until a technician reviews it.
+
+## 0004: Firmware update checks
+
+**Status:** Accepted 2026-09-24. The check is implemented; installing firmware from Studio waits for the bootloader (roadmap #98).
+
+On every connection to a USB device or the firmware simulator, Studio checks the account service for newer firmware releases for that board. Versions are compared numerically. If any newer release is marked `required` (a safety or security fix), Studio reports the update as required. The notice never blocks connecting or testing: device safety never depends on Studio, and a shop working offline must still be able to work. Device-only customers will get updates through a free updater app that needs no account.
+
+## 0005: AI mechanic assistant and data sharing
+
+**Status:** Accepted 2026-09-24. Planned after Studio 0.4.0, evaluated with pilot shops in 0.9.0, required for 1.0.0.
+
+The AI assistant answers from a curated knowledge library using retrieval, not model training. Sources include the diagnostic code library, knowledge files, bench-validation findings, and manufacturers' manuals and bulletins, each with recorded permission and technician review. No open web search. A question sends the question, current test results, diagnostic codes, vehicle make and model, and device versions. It never sends customer names, contact details, addresses, or free-text notes. The assistant stays off until the technician agrees on first use. Answers must cite sources, state confidence, put evidence first, refuse unsafe suggestions, stay in scope (e-mobility only), and never control the device. The cost is included in the Studio license at 300 questions per account per month.
+
+## 0006: Studio editions (Studio and Studio Pro)
+
+**Status:** Accepted 2026-09-25.
+
+One download serves two editions. The signed license's `plan` field (`studio` or `pro`) decides which features are on. Studio (software only) offers manual diagnosis, work orders, customers, vehicles, and reports. Studio Pro adds D1 tests, live data, the device screen, bus frames, firmware updates, the diagnostic code library, and the AI assistant. A D1 purchase includes three months of Studio Pro. There is no free trial; Studio is sold as a pre-order with beta access. Safety and device behavior are unaffected by the edition.
+
+## 0007: Knowledge database
+
+**Status:** Accepted 2026-09-25.
+
+The knowledge database stores vehicles, components, connectors, protocols, and fault codes as JSON in `knowledge/`, one file per entry. Git is the source of truth; every change is reviewed and validated by `scripts/knowledge.mjs check` before it reaches a build. A cloud mirror in Supabase is published by CI when `knowledge/` changes on main. Studio ships only `reviewed` or `validated` entries; drafts stay internal. Every entry lists its sources, a confidence level, and a status. Protocol messages, signals, and vendor error codes are labeled `hypothesis`, `observed`, or `verified`. Studio shows the label. Developer tools include search, show, new draft scaffolding, and CAN capture decoding.
+
+## 0008: From a Shopify order to a working Studio
+
+**Status:** Accepted 2026-09-26.
+
+A customer buys a Studio license at csharness.com. Shopify sends a signed webhook to the `shopify-orders` Edge Function, which maps SKUs to license products and terms, records the order, and creates the license immediately if the email has an EVCore account. If not, the grant waits and is applied when that email signs up. Cancelled orders revoke licenses. The customer downloads Studio, signs in with the order email, and the correct edition opens. During testing, `grant_mode` was `staff_only`; at launch it switched to `all`.
+
+## 0009: Bug reports and feature requests from customers
+
+**Status:** Accepted 2026-09-26.
+
+Customers report bugs and request features at csharness.com/pages/feedback, signing in with the same CS Harness account they use in Studio. In Studio, **Help > Report a problem or request a feature** opens that page with the Studio version filled in. Requests are private: a customer sees only their own requests and replies. Staff see all requests and can reply and change status. The system supports screenshots, email notifications, and account creation directly on the page.

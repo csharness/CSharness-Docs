@@ -1,0 +1,38 @@
+---
+title: "EVCore versioning policy"
+description: "EVCore versions firmware, host protocol, report schema, board definitions, knowledge packages, calibration formats, and Studio independently so changes are traceable and migrations explicit."
+sidebarTitle: "Versioning"
+---
+
+EVCore versions its firmware, host protocol, report schema, board definitions, knowledge packages, calibration formats, and EVCore Studio independently. Data from another version must be validated, and migrations must be explicit.
+
+## Version identifiers
+
+| Identifier | Where it lives | Form | Change it when |
+| --- | --- | --- | --- |
+| Firmware | `EV_FIRMWARE_VERSION` in `firmware/include/evcore_version.h` | Semantic version `MAJOR.MINOR.PATCH` | MAJOR: a behavior change a technician or host must know about (for example a safety rule or result meaning). MINOR: new capability. PATCH: fixes with no interface change. |
+| Build | `EV_BUILD_ID`, set by the build from `git rev-parse --short HEAD` | Commit hash, `_dirty` suffix for uncommitted changes | Automatically. A release build must never be `_dirty` or `dev`. |
+| Host protocol | `EV_CONTROL_PROTOCOL_VERSION` in `evcore_control.h`, `PROTOCOL_VERSION` in Studio `transport.js` | Integer | Any change an older host cannot safely ignore: removed or renamed commands, changed reply meaning, changed framing. Added `INFO` fields and new commands do not require a bump. |
+| Report schema | `schema_version` in `REPORT JSON` | Integer | A field is removed, renamed, or changes meaning. Added fields are allowed within a version because readers ignore unknown fields. |
+| Board definition | `EV_Board.definition` (for example a D1 revision) | Name plus revision, `[A-Za-z0-9._-]{1,32}` | The hardware binding changes: pins, polarities, scaling, available capabilities. |
+| Knowledge package | Not yet implemented (roadmap items 17 to 21) | To be defined with the schema | Reported as `none` until it exists. |
+| Calibration format | Not yet implemented (roadmap item 37) | To be defined with the calibration model | Reported as `none` until it exists. |
+| EVCore Studio | `version` in `software/evcore-studio/package.json` | Semantic version | Same rules as firmware, from the technician's point of view. |
+
+## Rules
+
+- Every report carries the firmware, build, protocol, and board identifiers, so any result can be traced to what produced it.
+- Studio refuses a device whose protocol version it does not support. It does not guess at compatibility.
+- A version bump belongs in the same commit as the change that requires it, with a `CHANGELOG.md` entry.
+- Stored data (Studio records, calibration, and knowledge files) carries its own schema version. Loading an unknown version fails safely instead of reinterpreting it.
+
+## Recent changes
+
+The `CHANGELOG.md` records notable changes to the firmware and EVCore Studio. No hardware release has been made yet; everything runs on the host simulator.
+
+- **Studio 0.3.2** (2026-09-26): Help link opens the feedback page at csharness.com/pages/feedback.
+- **Studio 0.3.1** (2026-09-26): Pre-order with beta access; sign-in screens explain account creation with the order email.
+- **Studio 0.3.0** (2026-09-25): Two editions in one download (Studio and Studio Pro), new Diagnoses screen with PDF reports, redesigned UI with dark theme, email confirmation and password reset, Windows installer with auto-update.
+- **Firmware 0.1.0** (unreleased): Safety requirements SR-01 to SR-19 with traced tests, draft hazard analysis with 16 hazards, generated fault-injection matrix, seeded fuzz tests, strict build gates, local screen menus, on-device diagnostic codes, structured fault records, host protocol 2 with request tags, and version reporting in `INFO` and `REPORT JSON`.
+
+For the full history, see `CHANGELOG.md` in the repository.

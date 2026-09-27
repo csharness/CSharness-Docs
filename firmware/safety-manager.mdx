@@ -1,0 +1,110 @@
+---
+title: "EVCore Safety Manager: States, Interlocks, and Fault Handling"
+sidebarTitle: "Safety Manager"
+description: "How the EVCore Safety Manager enforces safe state transitions across BOOT, DISARMED, ARMED, OUTPUT_ACTIVE, and FAULT, including E-stop handling, stale input detection, overcurrent protection, and reset rules."
+---
+
+The EVCore Safety Manager is a portable C11 state machine that controls when diagnostic outputs may be energized. It lives in `firmware/src/evcore_safety.c` and is the central gatekeeper between operator commands, measured inputs, and the output driver. This page describes its states, interlocks, fault types, and the rules for arming, enabling, and recovery.
+
+## States
+
+The manager moves through five logical states. All transitions are explicit; nothing arms or enables automatically.
+
+| State | Meaning | Exit condition |
+| --- | --- | --- |
+| BOOT | Initialization commanded all enables off; awaiting first inputs | Healthy update reaches DISARMED; unsafe check reaches FAULT |
+| DISARMED | Outputs off; permission to arm is checked on demand | Explicit healthy arm reaches ARMED |
+| ARMED | Outputs remain off; accepts one healthy nonzero enable request | Enable reaches OUTPUT_ACTIVE; disarm reaches DISARMED; fault reaches FAULT |
+| OUTPUT_ACTIVE | A logical output mask is commanded on | Disable/disarm reaches DISARMED; fault reaches FAULT |
+| FAULT | Enables off; fault bits retained | Explicit reset with all inputs healthy and fresh reaches DISARMED |
+
+Arm does not enable anything. Reset does not arm or restore prior enables. Disarm cannot clear a fault. New faults accumulate until a successful reset. A zero output mask always turns outputs off, and the next tick still evaluates faults.
+
+## Interlocks
+
+All nonzero enable requests require every interlock to be satisfied:
+
+- STOP is inactive
+- Hardware safety permission is granted
+- No HV conflict
+- No overvoltage
+- No overcurrent
+- No reported watchdog fault
+- Valid measurements and routing
+- Valid output configuration and device profile
+- Successful self-test
+- Fresh inputs (within the configured age limit)
+
+Every unsafe input latches even while disarmed. Default or zero-initialized inputs cannot authorize output. The caller supplies validated booleans; threshold logic, ADC scaling, and per-channel limits are handled by other modules, not hidden inside the Safety Manager.
+
+## Fault flags
+
+Faults are reported as bit flags and remain latched until an explicit healthy reset.
+
+| Flag | Meaning |
+| --- | --- |
+| `EV_FAULT_STOP` | Stop input active |
+| `EV_FAULT_LATCH` | Safety latch triggered |
+| `EV_FAULT_HV` | HV conflict detected |
+| `EV_FAULT_CURRENT` | Overcurrent condition |
+| `EV_FAULT_MEASUREMENT` | ADC or measurement invalid |
+| `EV_FAULT_ROUTE` | Routing invalid |
+| `EV_FAULT_CONFIG` | Output configuration invalid |
+| `EV_FAULT_SELF_TEST` | Self-test failed |
+| `EV_FAULT_STALE` | Inputs too old |
+| `EV_FAULT_OVERVOLTAGE` | Overvoltage condition |
+| `EV_FAULT_INTERNAL` | Internal inconsistency |
+| `EV_FAULT_WATCHDOG` | Watchdog fault reported externally |
+
+`EV_SafetyGetActiveFaults` evaluates current conditions using the supplied time. `EV_SafetyGetLatchedFaults` reports retained history. Active faults can be zero while the state remains FAULT because the latch persists. `EV_SafetyIsHealthy` requires both current checks to pass and no latched faults.
+
+## E-stop and stale input behavior
+
+An active STOP input latches `EV_FAULT_STOP` and forces an immediate transition to FAULT with all outputs off. The fault remains latched after STOP is released, so the system stays in FAULT until an explicit reset is requested with all inputs healthy and fresh.
+
+Stale inputs are detected when `EV_SafetyTick` is called with a timestamp strictly beyond the configured `max_input_age_ms`. The first check past the limit latches `EV_FAULT_STALE`, commands outputs off, and transitions to FAULT. You must call `EV_SafetyTick` periodically even when no new commands or inputs arrive, because shutdown on stale data happens at the tick boundary.
+
+## Overcurrent and reset rules
+
+Overcurrent is treated like any other interlock violation: it latches `EV_FAULT_CURRENT`, forces outputs off, and enters FAULT. While faulted, every tick reissues the off command, including after the physical condition clears. This means recovery is always explicit: the operator must request reset with all inputs healthy and fresh, and the Safety Manager verifies the snapshot before clearing the latch and returning to DISARMED with outputs off.
+
+Reset without a fault returns false and does nothing. Reset during an active persistent fault (such as an un-released STOP) is denied because the input snapshot is not healthy.
+
+## Outputs default off
+
+Initialization issues OFF through the supplied callback before modifying the manager state. A missing callback makes initialization fail and cannot command hardware. The callback receives zero on initialization, faults, reset, disarm, and off requests. A nonzero output mask is accepted only from ARMED; requests to change a valid mask while OUTPUT_ACTIVE are refused without changing the existing output. Disable and explicitly re-arm before requesting a new output mask. Unknown output bits are a configuration fault and shut down existing outputs.
+
+## API summary
+
+All public names use the `EV_Safety` prefix. The manager is single-owner and not thread-safe or ISR-safe.
+
+| Function | Purpose |
+| --- | --- |
+| `EV_SafetyInit` | Issue OFF first, validate configuration, initialize BOOT |
+| `EV_SafetyUpdate` | Accept a coherent input snapshot and evaluate faults; healthy startup reaches DISARMED |
+| `EV_SafetyTick` | Evaluate cached inputs, freshness, and consistency periodically |
+| `EV_SafetyArm` | Healthy DISARMED to ARMED; outputs stay off |
+| `EV_SafetyRequestOutputs` | Healthy ARMED to OUTPUT_ACTIVE for a valid nonzero mask |
+| `EV_SafetyDisarm` | Issue OFF and revoke arming; preserve FAULT |
+| `EV_SafetyDisableOutputs` | Issue OFF and revoke arming; preserve FAULT |
+| `EV_SafetyResetFault` | Healthy FAULT to DISARMED, clear history, keep outputs off |
+| `EV_SafetyGetState` | Current logical state |
+| `EV_SafetyGetActiveFaults` | Current conditions evaluated using the supplied time |
+| `EV_SafetyGetLatchedFaults` | Retained fault history |
+| `EV_SafetyIsHealthy` | Current checks pass and no fault is latched |
+| `EV_SafetyStateName` | Readable state label |
+
+## Integration requirements
+
+- Check successful initialization before using any other API.
+- One task owns the manager and output driver. Queue commands from UI/USB and events from other tasks.
+- Publish coherent snapshots with the original acquisition timestamp. Do not refresh a timestamp on cached data.
+- Use the same monotonic uint32 millisecond clock for timestamps and API calls.
+- Call `EV_SafetyTick` periodically even if no inputs or commands arrive.
+- The callback applies the full enable mask and must return promptly.
+- These bits represent logical permissions, not physical pins or relay sequencing. Actual drivers must implement safe ordering, settling, break-before-make, output feedback, and fault handling before hardware use.
+- The hardware safety chain must independently remove energy on STOP or latch events. Safe GPIO startup defaults and a hardware watchdog must cover boot, task starvation, crashes, and reset. This host module cannot do that.
+
+## Simulation and hardware status
+
+The Safety Manager is fully implemented and host-testable. The `scripts/run-safety.ps1` suite validates startup denial, every interlock, simultaneous and accumulated faults, deliberate reset, no automatic restart, disarm, invalid output masks, freshness boundaries, future timestamps, and clock rollover. However, it does not verify welded relays, MCU timing, analog protections, output-driver failure, actual power removal, or board compliance. The callback has no physical feedback in v0.1; `commanded_outputs` is never proof of the electrical state. STM32H743 peripheral drivers and FreeRTOS integration are not implemented yet.

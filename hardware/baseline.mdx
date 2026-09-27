@@ -1,0 +1,58 @@
+---
+title: "EVCore D1 Rev 0.9 Hardware Baseline"
+sidebarTitle: "Baseline"
+description: "Documented hardware baseline for the EVCore D1 diagnostic brick, including power, MCU, safety, sensing, and relay topology, plus known firmware gaps against the provisional design."
+---
+
+The EVCore D1 revision 0.9 hardware handoff defines the current design direction for the diagnostic brick. It is a requirements and design-intent document, not a reviewed schematic or netlist. The PCB developer remains open to hardware changes, and the firmware treats the baseline as provisional while keeping pin assignments and electrical assumptions explicit.
+
+## Design authority and change policy
+
+Use this handoff as the hardware baseline while recognizing that the PCB developer is open to changes. Keep any change explicit and explain its firmware impact. Do not silently change MCU family, pin assignments, or electrical assumptions.
+
+The document contains tasks directed at the PCB engineer, such as layout reviews and fabrication deliverables. Those are source requirements, not instructions to modify PCB files or order boards.
+
+## Document-grounded baseline
+
+| Area | Current document direction | Firmware treatment | Source |
+| --- | --- | --- | --- |
+| Instrument power | 24 V external bench adapter, approximately 65 W; internal 12 V/5 V/3.3 V | Separate instrument-rail status from DUT voltage; no assumed DUT-powered operation | pp. 2-3, sections 1, 4-5 |
+| DUT voltage | 84 V-class lithium packs were the handoff's practical target. The owner has since set batteries up to 96 V with inputs rated 120 V DC for headroom (2026-09-24), so the handoff needs review against it. A full 96 V-class pack reaches about 110 V; transient margin remains open | 84 V is not an approved ADC full scale, trip threshold, or absolute rating | pp. 2, 4, 9 |
+| MCU | STM32H743-class; earlier STM32H743IIT6 implementation | Retain portable C; exact MCU/package/production versus development board remains provisional | pp. 3, 5, sections 4, 12 |
+| Safety | TPS3808, SN74LVC1G74 latch, logic gating/heartbeat, LM339B and isolated status concept | Board-specific latch clear/arm/feedback and independent shutdown; exact polarities and timing not established | pp. 3-4, section 6 |
+| Protected outputs | TPS2553DBVR 5 V; TPS1H200AQDGNRQ1 12 V; default off | Independent output commands and fault telemetry; current limits remain provisional | p. 4, section 7 |
+| HV sensing | Independent battery and A/B/C phase observations; divider/protection and possible AMC1311 isolation | Per-channel units/calibration/freshness; no hardcoded divider or shared-ground assumption | p. 4, section 8 |
+| Kelvin | LM317 current source, 1-ohm reference/shunt concept, three AD8226 gain paths, OPA333, dedicated ADS1115 | Actual-current measurement, gain/range selection, per-path calibration, settling and validity needed | pp. 4-5, section 9 |
+| Relay matrix | 13 reed relays: one master current relay and 12 FORCE/SENSE phase-selection relays; Coto 9007-05-00 and TPL7407LA concept | Explicit physical mapping separate from logical routes; contact behavior and timing require confirmation | pp. 4-5, 7 |
+| Back-EMF | Wheel/motor may generate voltage with Brick outputs off | Fresh external-voltage permission before relay switching and resistance excitation; passive sensing must remain possible safely | p. 5, sections 9-10 |
+| ADC | ADS1115 for precision/low-speed paths; MCU ADC possible for faster monitoring; PCA9306 translation | Bus/channel/range configuration and sample scheduling behind drivers | p. 5, section 11 |
+| USB | USB4105-GF-A latest receptacle; USB 2.0 D+/D-, device/UFP direction; ADuM4160 isolation under review | USB role/speed/isolation confirmed before descriptors/driver selection; connector does not choose command protocol | p. 5, section 13 |
+| CAN | ADM3053 earlier isolated choice; selectable/jumper 120-ohm termination | Capability for termination control/status if hardware supports it; no assumed switch or peripheral pins | p. 6, section 14 |
+| RS-485/UART | RS-485 transceiver/bias/termination/isolation open; protected 3.3 V/5 V UART intent | Explicit voltage mode/direction/configuration capability, not bare MCU GPIO | p. 6, section 14 |
+| Local UI | 4-inch color TFT; PEC11R-4215F-S0024 encoder with push | Local controls invoke same operations as USB; display controller/interface remains open | p. 5, section 12 |
+| Harness | Harting Han-Modular concept; optional retained 1-Wire ID | Adapter capability maps; identification mechanism is still provisional | p. 6, section 15 |
+| Mechanical | Hammond 1455T2201 concept | No PCB dimensions derived from archived offsets | p. 6, section 16 |
+
+## Source ambiguities to retain
+
+- Section 13 selects USB4105-GF-A and explicitly supersedes the Amphenol 12402012E212A; the archived component table on p. 7 still lists Amphenol. Use USB4105-GF-A as the current baseline, while allowing a reviewed change.
+- The p. 7 ADuM4160 row is labeled "Isolated USB to UART/SPI". That label alone does not establish a UART/SPI bridge or USB firmware stack. Confirm actual topology and functions from the corrected schematic or device documentation.
+- The p. 10 reference table ties MCU ground and some output returns to HV_BAT_NEG, while sections 8, 13, 14, and 22 leave grounding/isolation open. Do not adopt that reference connection as a final grounding decision.
+- Section 19 is an archived HV prototype purchasing/research BOM, not a mandate to install every module. It cannot override the normal 24 V instrument-power architecture or establish final ADC/shunt scaling.
+- Resistors listed for dividers, output current limits, LM317 current, comparator thresholds, and AD8226 gains are explicitly provisional; none become firmware constants in this review.
+
+## Firmware gaps exposed by the handoff
+
+1. **External energy versus commanded OFF:** `off_confirmed` currently checks Brick output state. It does not independently prove absence of DUT battery voltage or motor-generated voltage. `hv_conflict` exists as a logical input, but a fresh, operation-specific board permission is needed for every relevant route transition and current-source enable. Tests must inject external voltage before starting, while waiting for routing, and between measurements.
+2. **Shutdown ordering:** fault handling must remove excitation independently of measurement-relay movement. The correct response when external voltage is present (which contacts may safely open or change) needs explicit board approval. A blanket command to open every relay is not proof of compliance with the document's hot-switch restriction.
+3. **Passive phase observation:** the current back-EMF demo reuses the generic switched-route test runner. That is only a simulation. The physical design calls for independent protected phase sensing, so passive acquisition should not require switching Kelvin contacts under back-EMF.
+4. **Master relay meaning:** the document describes a master Kelvin-current relay. The generic `EV_OUT_MASTER` bit appears in sensor-power demo masks too. Do not map it blindly to that relay. Distinguish logical output permission, sensor power switching, and the physical current-source master in the board adapter.
+5. **Kelvin route meaning:** four distinct logical IDs in the current Kelvin checker are lead identifiers, not four different motor phases. FORCE and SENSE leads may terminate on the same physical phase; the 13-relay mapping needs a phase/polarity/path model before implementing a board driver.
+6. **Analog completeness:** add gain-path metadata, sample saturation handling, actual stimulus current, reference health and calibration identity. A direct simulated resistance value does not exercise AD8226/ADS1115 acquisition.
+7. **Control completeness:** local and USB APIs still need voltage-mode, termination, adapter-ID, per-channel acquisition/calibration, and hardware-latch operations where implemented. Unsupported capability must remain explicit.
+
+These are tracked design and implementation gaps, not claimed fixes. This review does not change firmware behavior or reinterpret passing host tests as hardware proof.
+
+## Next hardware and firmware interface decisions
+
+Specify logical signals and capabilities first: power-good, STOP, latch arm/clear and status, external voltage validity and switching permission, independent rail faults, master-current enable/feedback, phase and Kelvin paths, gain and ADC selection, USB role and isolation, bus modes and termination, adapter detection, display and encoder. For each, record direction, safe state, validity and freshness, failure response, and whether permission is enforced independently in hardware. Pins, polarities, thresholds and deadlines stay unresolved until supplied or approved.

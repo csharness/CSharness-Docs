@@ -1,0 +1,63 @@
+---
+title: "EVCore Firmware and Studio Architecture"
+sidebarTitle: "Architecture"
+description: "How the EVCore firmware and EVCore Studio are structured: device/desktop split, firmware layers, cooperative scheduler, and the hardware abstraction boundary."
+---
+
+EVCore is split into two independent systems: the device firmware, which owns test execution and safety, and EVCore Studio, a separate desktop application that requests actions and records evidence. The device never depends on Studio being connected. Both systems communicate over a shared control path using protocol v2 request tags.
+
+## Device and desktop split
+
+The firmware runs diagnostics locally on the device, with its own screen and rotary knob for standalone operation. EVCore Studio connects over USB-C and controls the same firmware functions through the same typed control API that the local UI uses. Studio never computes a diagnostic result that the device did not produce.
+
+```text
+Local device menus/buttons       Separate desktop suite
+            |                         | USB-C transport
+            |                    Firmware command parser
+            +------------+------------+
+                         |
+                 EV_ControlExecute
+                         |
+          On-device application / diagnostics
+                         |
+        Safety / routing / board drivers / hardware
+```
+
+Both local and remote callers read the same structured status, profiles, reports, and event history. The current shared actions are START, STOP, RESET, and optional bootloader handoff. Hardware safety always overrides both control sources.
+
+## Firmware layers
+
+The firmware is organized into four layers. A module may include headers from its own layer or a lower one, and same-layer includes must not form a cycle. `node scripts/check-layers.mjs` enforces this and runs as part of `scripts/verify.ps1`.
+
+| Layer | Modules | Responsibility |
+| --- | --- | --- |
+| **3 Host interface** | `evcore_console`, `evcore_control`, `evcore_report`, `evcore_ui` | Text protocol parsing and replies; typed control entry point shared by local and remote callers; report serialization; local screen menus and display-independent screen model |
+| **2 Application** | `evcore_app` | Bounded test sequences: profile validation, OFF confirmation, routing, stimulus, settling, measurement, cleanup, and result |
+| **1 Services** | `evcore_routing`, `evcore_measurement`, `evcore_sensor`, `evcore_diagnostic` | Route validation and relay sequencing; measurement validity, calibration, and Kelvin/phase/Hall analysis; sensor sweeps and pulses; single-step sensor diagnostic |
+| **0 Foundation** | `evcore_safety`, `evcore_fault`, `evcore_log`, `evcore_storage`, `evcore_comms`, `evcore_system`, `evcore_version`, `evcore_compiler` | Latched-fault safety state machine and output permission; fault-code catalog and records; event ring; CRC records; CAN and serial queues; heartbeat supervisor; version and compiler macros |
+
+### Hardware boundary
+
+Nothing in `firmware/` touches a register, pin, or peripheral. Every hardware action goes through callbacks: `EV_Board` (in `evcore_app.h`), `EV_ApplyOutputs` (in `evcore_safety.h`), and `EV_RouteApply` (in `evcore_routing.h`). The simulator in `simulation/` implements these callbacks now; an STM32 board layer will implement them later. Firmware never includes simulator or test headers.
+
+### Safety as a foundation
+
+The safety manager is a leaf module that services consult. Routing and the test runner ask it for permission before energizing or moving relays. Nothing energizes without safety approval, and safety depends on nothing it could be blocked by. All outputs default OFF, and every failure path ends de-energized.
+
+### Ownership and scheduling
+
+All state lives in caller-owned structs. `EV_App` owns one `EV_Safety`, `EV_Routing`, a copied `EV_TestProfile`, a report, and a log. There is no heap and no global mutable state in firmware modules. The APIs are single-owner and non-reentrant. A cooperative time-triggered scheduler feeds them from one owner context.
+
+## Scheduler
+
+The firmware uses a cooperative, time-triggered main loop (decision 0002). A hardware timer sets the tick; the loop runs the safety and app tick every period, then drains USB and console work within a time budget. Interrupts only capture inputs and move bytes.
+
+This choice was accepted on 2026-09-24 because it is the simplest to analyze: worst-case loop time is measurable, and no RTOS code needs to be qualified. The rule is that exactly one task context owns `EV_App`. Interrupts capture timestamped inputs and move bytes into bounded queues (`EV_ByteQueue`, `EV_Can`).
+
+FreeRTOS or ThreadX may be revisited only when a measured time-budget overrun appears, for example from display redraws or flash writes. Independent hardware must still remove outputs if firmware stops, regardless of the scheduler choice.
+
+## EVCore Studio structure
+
+Studio is an Electron application. The main process (`desktop/main.cjs`) owns files, backups, USB permission, PDF rendering, and the firmware simulator bridge. The sandboxed page reaches the main process only through the fixed `window.evcore` API in `desktop/preload.cjs`. Every IPC request is checked to come from the app's own page.
+
+The page (`public/`) is split into core modules (storage, record database, device connection) and one module per screen. Studio connects to the device in three modes: in-app demo (synthetic signals), firmware simulator (real firmware with simulated hardware), and USB device (Web Serial with Studio's own port picker). Simulated data is labeled as simulated everywhere, including on service reports.

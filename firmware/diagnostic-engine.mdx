@@ -1,0 +1,101 @@
+---
+title: "EVCore Diagnostic Engine: Profiles, Measurements, and Test Results"
+sidebarTitle: "Diagnostic Engine"
+description: "How the EVCore diagnostic engine runs nonblocking sensor tests using profiles, interprets PASS, FAIL, and UNKNOWN results, and integrates with the application modules."
+---
+
+The EVCore diagnostic engine is a portable, nonblocking test runner that evaluates sensor and motor measurements against profile limits. It lives in `firmware/src/evcore_diagnostic.c` and works with the Safety Manager to ensure outputs are only energized when explicitly authorized and safe. This page covers the test sequence, profiles, measurement interface, result meanings, and the integrated application modules that support it.
+
+## Test sequence
+
+A diagnostic test follows a strict, bounded sequence:
+
+1. Initialize the Safety Manager and diagnostic object once.
+2. Publish a complete healthy safety snapshot.
+3. Explicitly arm the Safety Manager in response to an operator action.
+4. Start the test with a profile; the profile is copied to avoid mid-test edits.
+5. Continue publishing safety inputs and calling the diagnostic tick regularly.
+6. Read `result`, `reason`, `has_measurement`, `measured_volts`, and `safety_faults` after `state` becomes `EV_DIAG_DONE`.
+
+The diagnostic tick also calls the safety tick while idle or done. Starting does not arm or reset faults. An already running test rejects a second start without changing the active test. Other rejected starts end with UNKNOWN and disarm.
+
+## Profiles
+
+A profile defines inclusive voltage limits, settling duration, overall timeout, and maximum sample age. Limits must be finite, ordered, and within 0 to 5 V for the current sensor range test. Timeout must exceed settling time. Timing uses the same uint32 millisecond clock as safety, and durations must remain below half its range to avoid rollover ambiguity.
+
+The demonstration uses 20 ms settling, 100 ms timeout, 10 ms sample age, and 0.5 to 4.5 V limits. These are illustrative simulation values, not approved device limits.
+
+## Measurement interface
+
+The diagnostic engine consumes samples through a replaceable callback:
+
+```c
+typedef enum { EV_READ_PENDING, EV_READ_OK, EV_READ_ERROR } EV_ReadStatus;
+typedef struct {
+    float volts;
+    uint32_t sampled_at_ms;
+    bool valid;
+} EV_VoltageSample;
+typedef EV_ReadStatus (*EV_ReadVoltage)(void *context, EV_VoltageSample *sample);
+```
+
+The driver reports PENDING, OK, or ERROR. An OK sample carries voltage, validity, and the original acquisition time. The engine rejects nonfinite, invalid, stale, future, or pre-settling samples as UNKNOWN. PENDING continues until timeout. At the exact timeout boundary, timeout takes precedence over reading a sample. Safety interruption takes precedence over timeout.
+
+## Result meanings
+
+| Result | Meaning |
+| --- | --- |
+| PASS | One usable sample lies inside the profile limits |
+| FAIL | One usable sample lies outside the profile limits |
+| UNKNOWN | No reliable conclusion due to an invalid profile, denied permission, safety interruption, timeout, unusable sample, or cancellation |
+
+PASS means one sample met the selected range, not that an entire sensor or vehicle has been certified healthy. Every terminal path turns off outputs and disarms; existing safety faults remain latched. No diagnostic code clears a safety fault. Restart requires explicit arm, and latched faults also require a healthy snapshot and explicit fault reset.
+
+## Integrated application modules
+
+The diagnostic engine is one part of a larger integrated application. The following modules work together during a test:
+
+| Module | File | Role |
+| --- | --- | --- |
+| Routing | `firmware/src/evcore_routing.c` | Validates logical routes and sequences relay break/settle timing |
+| Measurement | `firmware/src/evcore_measurement.c` | Handles calibration, Kelvin resistance, phase analysis, and back-EMF evaluation |
+| Sensor | `firmware/src/evcore_sensor.c` | Analog sweeps and pulse frequency/duty conversion |
+| Log | `firmware/src/evcore_log.c` | Bounded 64-event ring buffer for test history |
+| Communications | `firmware/src/evcore_comms.c` | CAN frame validation, serial queues, and transport adapters |
+| Console | `firmware/src/evcore_console.c` | Host command parser and text rendering for PC control |
+| Storage | `firmware/src/evcore_storage.c` | Versioned CRC records for calibration and report persistence |
+| System | `firmware/src/evcore_system.c` | Configurable heartbeat supervision and reset-cause tracking |
+
+These modules are orchestrated by `EV_App` in `firmware/src/evcore_app.c`, which owns one Safety Manager, one Routing instance, a copied test profile, a report, and a log. No dynamic allocation is used. All APIs, queues, callbacks, and console handling are single-owner and non-reentrant.
+
+## Application ownership and sequence
+
+`EV_App` coordinates the full test sequence:
+
+1. Service safety and verify profile/adapter compatibility while DISARMED.
+2. Command stimulus off, check available off feedback, and open routes.
+3. Wait configured break time, apply the requested route, and wait settling.
+4. Ask the board to validate and configure the stimulus while still off.
+5. Arm and request the output mask through the Safety Manager; passive tests stay off.
+6. Wait stimulus settling and obtain a fresh matching measurement.
+7. Command off and confirm available feedback before the next route.
+8. Finish with outputs off and routes open; retain readings, limits, and reason.
+
+`START` authorizes internal re-arming only between steps of that sequence. Fault, timeout, invalid measurement, or cancellation terminates that authorization. Releasing STOP or resetting faults cannot resume an interrupted sequence.
+
+## Simulation scenarios
+
+The host simulator demonstrates four outcomes:
+
+| Scenario | Result | Outputs after test |
+| --- | --- | --- |
+| 2.50 V inside 0.50 to 4.50 V limits | PASS | Off |
+| 4.80 V outside those limits | FAIL | Off |
+| E-stop during the test | UNKNOWN, safety interruption | Off, fault latched |
+| No measurement before deadline | UNKNOWN, timeout | Off |
+
+These are example simulation values. The tests exercise commanded enable behavior, not physical electrical safety. No MCU, relay, power output, electrical measurement, or hardware model is connected.
+
+## Hardware integration status
+
+The diagnostic engine is fully implemented and host-testable. The host suite covers inclusive range boundaries, bad profiles, denied permission, duplicate starts, settling, failed and pending reads, invalid and nonfinite samples, stale and future samples, timeout, cancellation, E-stop, stale safety data, fault recovery, output ownership, and timestamp rollover. STM32H743 peripheral drivers, FreeRTOS integration, actual ADC input, relay routing, and sensor sweeps remain future hardware integration work.

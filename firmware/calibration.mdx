@@ -1,0 +1,83 @@
+---
+title: "EVCore Calibration System: Data Model, Validation, and Roadmap"
+sidebarTitle: "Calibration"
+description: "How EVCore handles measurement calibration as structured data, including the existing conversion model, sample flags, storage format, and the planned calibration workflow."
+---
+
+EVCore treats calibration as data, not as scattered constants. The knowledge base (section 11) establishes this principle, and the current firmware provides the foundation for a complete calibration system. This page describes what exists today, what is missing, and the rules the eventual design must follow.
+
+## What exists today
+
+### Conversion model
+
+`EV_Calibration` in `firmware/include/evcore_measurement.h` holds the parameters for raw-to-engineering-unit conversion:
+
+```c
+typedef struct {
+    float gain;
+    float offset;
+    float min_raw;
+    float max_raw;
+    uint32_t revision;
+} EV_Calibration;
+```
+
+`EV_Calibrate` refuses a zero revision, nonfinite values, a zero or subnormal gain, an empty range, a raw value outside the range, and a nonfinite result. This prevents obviously corrupted calibration from producing dangerous output decisions.
+
+### Sample flags
+
+Measurements can carry flags that make them unusable for PASS/FAIL decisions:
+
+| Flag | Value | Meaning |
+| --- | --- | --- |
+| `EV_SAMPLE_INVALID` | 1 | Sample is invalid |
+| `EV_SAMPLE_CLIPPED` | 2 | Sample exceeded the measurable range |
+| `EV_SAMPLE_UNCALIBRATED` | 4 | No calibration was applied |
+
+Any flag makes the sample unusable for PASS/FAIL. An uncalibrated or invalid channel produces flagged, unusable samples, and the result is UNKNOWN, never a guess.
+
+### Storage format
+
+`EV_RecordEncode` and `EV_RecordDecode` in `firmware/include/evcore_storage.h` store versioned, typed, generation-numbered byte records with a CRC32. This format is suitable for a calibration payload:
+
+```c
+#define EV_RECORD_HEADER 20u
+#define EV_RECORD_MAX_PAYLOAD 512u
+
+uint32_t EV_Crc32(const uint8_t *bytes, size_t count);
+bool EV_RecordEncode(uint16_t type, uint16_t version, uint32_t generation,
+    const uint8_t *payload, size_t length, uint8_t *record, size_t capacity, size_t *written);
+bool EV_RecordDecode(const uint8_t *record, size_t length, uint16_t type, uint16_t version,
+    uint32_t *generation, const uint8_t **payload, size_t *payload_length);
+```
+
+The format uses explicit little-endian headers and bounded payloads, not native struct images. A CRC catches accidental corruption; it does not authenticate the data. A valid CRC record still needs semantic validation.
+
+### Reporting
+
+`INFO` and every report currently state `calibration=none` or `null`, because no calibration is loaded yet. The raw ADC value stays with the scaled value so a calibration mistake can be corrected later (roadmap item 35).
+
+## What is missing
+
+| Needed | Roadmap item |
+| --- | --- |
+| Calibration model per channel and range: offset/gain, divider and amplifier scaling, current-source and resistance calibration, temperature coefficients where justified | #37 |
+| Payload schema with device identity, date, calibration version, and the reference instruments used | #37 |
+| Sanity bounds so corrupted calibration can never produce a dangerous output decision (hazard H-11) | #37 |
+| Two-slot atomic storage that survives power loss | #38 |
+| Uncertainty carried with each measurement | #39 |
+| Calibration and status queries in the host protocol | #62 |
+| Bench calibration workflow with reference loads | #78 |
+| Studio screen showing calibration provenance and expiry | #92 |
+| Manufacturing calibration station | #99 |
+
+Divider ratios, amplifier gains, and references are open hardware items tracked in `hardware-open-items.md`. No calibration constant has been chosen because the hardware baseline remains provisional.
+
+## Rules
+
+The calibration system must follow these design rules:
+
+- Calibration only changes how raw readings are scaled. It never widens a safety limit or authorizes a stimulus.
+- An uncalibrated or invalid channel produces flagged, unusable samples, and the result is UNKNOWN, never a guess.
+- The raw ADC value stays with the scaled value, so a calibration mistake can be corrected later.
+- A calibration record from an unknown format version is rejected, never reinterpreted. See [versioning rules](/engineering/versioning) for the version policy.

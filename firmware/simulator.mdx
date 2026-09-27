@@ -1,0 +1,184 @@
+---
+title: "EVCore Host Simulator and D1 Emulator"
+sidebarTitle: "Simulator"
+description: "Run the EVCore firmware on a host simulator or D1 emulator to test profiles, commands, and protocol behavior without hardware."
+---
+
+EVCore provides two host-based simulation tools: the integrated MVP simulator for firmware testing, and the D1 emulator for testing EVCore Studio. Both run the real firmware on a simulated board and produce the same protocol outputs as the eventual hardware. This page covers how to run each tool, the available profiles, and the commands you can use.
+
+## Host simulator (MVP)
+
+The integrated MVP simulator runs the firmware application, safety supervision, and host console in a deterministic virtual environment. Use it to verify profile behavior, safety sequences, and protocol responses before hardware is available.
+
+Run the simulator from PowerShell:
+
+```powershell
+.\scripts\run-mvp.ps1
+```
+
+For an interactive text console where you control time manually:
+
+```powershell
+.\scripts\run-mvp.ps1 -Interactive
+```
+
+In interactive mode, time advances only with `TICK` (each tick is 10 ms) or simulated STOP changes. This is a virtual device for testing; it must never be used as the scheduling model for a real energized device.
+
+### Interactive commands
+
+| Command | Description |
+| --- | --- |
+| `START <id>` | Authorize and run profile `<id>` |
+| `TICK` | Advance simulation time by 10 ms |
+| `ESTOP` | Press the simulated emergency stop |
+| `RELEASE` | Release the simulated emergency stop |
+| `REPORT` | Show the completed test report in text format |
+| `REPORT JSON` | Export the completed test report as JSON |
+| `STATUS` | Show current safety and test state |
+| `INFO` | Show firmware and protocol version info |
+| `PROFILES` | List available test profiles |
+| `LOG` | Show retained event history |
+| `RESET` | Clear a latched fault if inputs are healthy |
+| `HELP` | List firmware commands |
+| `KNOB CW`, `KNOB CCW`, `KNOB PRESS`, `KNOB HOLD` | Turn, press, or long-press the simulated front-panel encoder |
+| `SCREEN` | Show what the device's own display shows |
+| `QUIT` | Exit the simulator |
+
+Commands are case-sensitive and newline-delimited. `TICK`, `ESTOP`, `RELEASE`, `KNOB`, and `QUIT` are host controls, not firmware protocol commands. `START` explicitly authorizes a bounded profile sequence but cannot clear a safety fault. `STOP` cancels and removes stimulus. `RESET` clears a healthy fault but does not restart anything.
+
+### Example interactive session
+
+```text
+START 2
+TICK
+TICK
+REPORT
+START 3
+TICK
+ESTOP
+REPORT
+RELEASE
+RESET
+STATUS
+LOG
+QUIT
+```
+
+### Available profiles
+
+| Profile | Description |
+| --- | --- |
+| 1 | Single analog range measurement |
+| 2 | Three phase-pair resistance scan |
+| 3 | Three passive back-EMF amplitude comparison |
+
+Profile 1 simulates an analog sensor. Profile 2 scans three phase resistances and computes a mismatch percentage. Profile 3 compares three passive back-EMF amplitudes. All profiles use illustrative simulation values, not approved hardware limits.
+
+### REPORT JSON output
+
+A completed `REPORT JSON` exports a structured result. Here is an example from profile 2, trimmed to the first sample:
+
+```json
+{
+  "schema_version": 1,
+  "profile_id": 2,
+  "profile_revision": 1,
+  "result": "PASS",
+  "reason": "within profile limits",
+  "started_ms": 0,
+  "finished_ms": 30,
+  "faults": 0,
+  "samples": [
+    {
+      "kind": 2,
+      "channel": 0,
+      "value": 0.25,
+      "unit": "ohm",
+      "minimum": 0.100000001,
+      "maximum": 1,
+      "time_ms": 10,
+      "flags": 0
+    }
+  ],
+  "phase_comparison": true,
+  "mismatch_percent": 0,
+  "mismatch_limit_percent": 10,
+  "fault_records": [],
+  "fault_records_dropped": 0,
+  "diagnostic_codes": [],
+  "versions": {
+    "firmware": "0.1.0",
+    "build": "1a2b3c4",
+    "protocol": 2,
+    "board": "mvp-sim-1",
+    "knowledge": "0.1.0",
+    "calibration": null
+  }
+}
+```
+
+Limits are stored as `float`, so values like 0.1 may print as `0.100000001`.
+
+## D1 emulator
+
+The D1 emulator is a standalone Windows program that behaves like an EVCore D1 plugged in over USB. It runs the real firmware in real time and speaks host protocol v2 on a serial port. It is an internal test tool and is never shipped to customers or published with Studio releases.
+
+### Setup
+
+You need a pair of connected serial ports: the emulator opens one, Studio opens the other. Windows has none built in. Choose one of these options:
+
+**Option A: Virtual port pair (software only)**
+
+1. Download the signed 64-bit com0com build (`com0com-2.2.2.0-x64-fre-signed.zip`) from the com0com project on SourceForge and run its setup as administrator. Untick the default `CNCA0`/`CNCB0` pair if the installer offers it.
+2. Open **com0com > Setup Command Prompt** from the Start menu (as administrator). If the installer created the default pair, rename it: `change CNCA0 PortName=COM20`, then `change CNCB0 PortName=COM21`. Otherwise create one: `install PortName=COM20 PortName=COM21`.
+3. Check that Device Manager shows COM20 and COM21.
+
+Use the signed 2.2.2.0 build. The newer com0com 3.0.0.0 is unsigned and Windows 11 blocks it.
+
+**Option B: Two USB serial adapters (real USB)**
+
+Two USB-to-TTL serial adapters (for example FTDI or CH340) wired to each other: TX to RX, RX to TX, GND to GND. Each appears as its own COM port. Run the emulator on one port and connect Studio to the other.
+
+### Running the emulator
+
+```text
+EVCore-D1-Emulator.exe --port COM21
+```
+
+Or double-click `Start D1 emulator.cmd` (defaults to COM21). Then in EVCore Studio signed in with Studio Pro: **Connect over USB**, and choose the other port of the pair (COM20). Studio shows **D1 emulator** and **Simulated data**.
+
+Options: `--serial SIM-BENCH-2` (another simulated serial), `--vehicle phase-imbalance` (starting condition), `--verbose` (print every protocol line in both directions).
+
+### Emulator operator commands
+
+Type these in the emulator window to control the simulated world:
+
+| Command | Description |
+| --- | --- |
+| `STOP`, `RELEASE` | Press or release the device's STOP button. STOP turns outputs off and latches a fault until released and reset |
+| `KNOB CW`, `KNOB CCW`, `KNOB PRESS`, `KNOB HOLD` | Turn, press, or long-press the knob. Studio's Device screen mirrors the result |
+| `VEHICLES` | List simulated vehicle conditions |
+| `VEHICLE <condition>` | Set vehicle state: `healthy`, `phase-imbalance`, `open-phase`, `sensor-high`, `sensor-low`, `weak-back-emf`, `uneven-back-emf` |
+| `SET <quantity> <channel> <value>` | Set one simulated reading: quantity `voltage`, `current`, `resistance`, `frequency`, or `back-emf`; channel 0 to 15 |
+| `FAULT <name> ON` or `OFF`, `FAULT CLEAR` | Simulated instrument faults: `overcurrent`, `overvoltage`, `latch`, `stale`, `pending`, `read`, `configure`, `route`, `feedback`, `input`, `wrong-channel`, `wrong-kind` |
+| `STATE` | Show serial, vehicle condition, STOP, output mask, routing, active faults, and emulator time |
+| `QUIT` (or Ctrl+C) | Stop the emulator. Any test ends with outputs off |
+
+### Studio release test pass
+
+1. Install the Studio customer build and sign in with a Studio Pro test account.
+2. Start the emulator and connect Studio. Check that Studio says **D1 emulator** and **Simulated data**.
+3. Run a guided job with `VEHICLE healthy` (expect PASS), then `phase-imbalance` and `sensor-high` (expect FAIL with a diagnostic code).
+4. Save the service report and verify it is marked simulated.
+5. Press `STOP` in the emulator: Studio shows the fault and refuses to start or reset until `RELEASE`; then reset from Studio.
+6. `FAULT read ON` and run a test: expect an instrument problem, not a vehicle finding.
+7. Turn the knob in the emulator and watch Studio's Device screen follow.
+8. `QUIT` the emulator. Studio must report that the device stopped answering and must never claim the outputs are off.
+
+## Important notes
+
+- The emulator identifies itself as board `mvp-sim-1` with a serial that always starts with `SIM-`. Studio recognizes this identity and labels everything as simulated.
+- Simulators are never licensed devices, so Studio does not ask the license server whether the device is registered. Studio Pro is still required for device features.
+- All test profiles and vehicle conditions are illustrative fixtures. None of it is a hardware or vehicle fact.
+- The intended transport is USB CDC over USB-C, which is not implemented yet (roadmap item 77). Today both tools run over stdin/stdout or a serial port pair.
+- STM32H743 peripheral drivers and FreeRTOS integration are not implemented yet. This is not a flashable STM32 image.

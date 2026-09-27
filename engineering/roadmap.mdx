@@ -1,0 +1,87 @@
+---
+title: "EVCore development roadmap by phase"
+description: "EVCore roadmap organized by development phase, from foundation through production, covering firmware, Studio, hardware, and knowledge milestones."
+sidebarTitle: "Roadmap"
+---
+
+The EVCore roadmap follows the development phases in the CS Harness knowledge base (section 30). Items run in priority order within each phase. Phases overlap: Studio work and much of the firmware work can proceed while hardware decisions are pending. The roadmap covers 100 items, with additional Studio 1.0 milestones tracked separately.
+
+## Progress snapshot
+
+As of the last update (2026-09-24), the following are complete:
+
+- Foundation: `verify.ps1` gate, CI, coverage, hazard analysis draft, safety requirements with traceability, fault-injection matrix, fuzz tests, versioning policy, structured fault records, instrument/fault separation, scheduler decision (cooperative time-triggered loop).
+- Knowledge core: git JSON source, validator, Studio bundle generator, cloud mirror, schema for vehicles, components, connectors, protocols, and fault codes, provenance and confidence rules.
+- Studio MVP: USB port picker, local database with backups, customers and vehicles linked to work orders, service reports, portable Windows release, guided job, help screen, code split into modules, accounts and licensing, device screen, firmware update check, editions (Studio and Studio Pro), manual diagnosis with PDF reports, redesign, release pipeline, purchase-to-license flow, knowledge database in Vehicle library, D1 emulator, customer builds.
+- Local screen: menus, encoder handling, confirmation before START, knob STOP, diagnostic codes, code lookup, device info, fault page with reset.
+
+## Phase 0: Foundation (1–16)
+
+The foundation establishes the build system, safety discipline, and documentation contract before feature work accelerates.
+
+Key items include: a single `verify.ps1` command that gates every commit; CI on every push with a Linux/GCC job to prove portability; code coverage with a minimum threshold for the safety module; deciding applicable product standards (IEC 61010-1, IEC 61326-1, and IEC 61508 practices); a draft hazard analysis mapping hazards to controls; numbered safety requirements traced to tagged tests; a generated fault-injection test matrix; fuzzing of the console parser, report JSON writer, and storage record decoder; independent versioning for firmware, protocol, and Studio; and the scheduler decision (cooperative time-triggered main loop).
+
+## Phase 1: Knowledge core (17–31)
+
+This phase builds the data layer that later diagnostics depend on.
+
+Key items include: the knowledge storage format and toolchain decision (JSON source files, validator, and generators for firmware tables and Studio); the canonical schema for components, connectors, adapters, procedures, protocols, and fault codes; provenance, confidence, and validation status on every entry; a schema validator run by the verify script; generators producing compact C tables for the firmware; adapter definitions with stable IDs, connector mappings, and capability limits; component profile types for motor, controller, battery/BMS, display, throttle, brake, PAS/torque, and thermistor; the result model with observation, derived value, expectation, finding, hypothesis, diagnosis, and recommendation; result categories (WARNING, INCONCLUSIVE, UNSUPPORTED, ABORTED, SAFETY_FAULT); and a read-only knowledge browser in Studio.
+
+## Phase 2: Simulated diagnostics (32–56)
+
+This phase adds the diagnostic engine and the first simulated test procedures.
+
+Key items include: a library of test primitives (read voltage, measure resistance, wait for stable value, compare against profile); a procedure engine that runs schema-defined procedures and always cleans up; measurement quality flags (saturated, disconnected, unstable, out of range, stale, uncalibrated); settling detection; calibration model as data with version and sanity bounds; uncertainty estimates; simulated motor faults (shorted winding, open phase, damaged phase wire, stuck Hall, wrong Hall order); Hall supply and state validation; controller scenario tests; battery/BMS passive checks; sensor procedures for throttle, brake, PAS, and thermistor; harness tests for continuity, shorts, and pin mapping; detection of intermittent faults during harness flexing; adapter capability checks; external-energy injection tests; a protocol module framework with raw capture of unknown traffic; a first simulated CAN protocol module; a self-test framework; and a regression-test policy requiring every field-found defect to get a test.
+
+## Host protocol (57–64)
+
+This phase formalizes the device-to-host interface.
+
+Key items include: a host protocol specification with a conformance suite; a device-side host lease so a remote-started test stops if Studio stops renewing; a `CAPS` command for full capability discovery; progress and event streaming during procedures; live measurement streaming with sequence numbers and dropout counters; knowledge, profile, and calibration status queries; knowledge-package upload (SAFE state only, validated, rejected if incompatible); and a threat model for the device, USB link, and Studio.
+
+## Phase 3: Board binding (65–72)
+
+This phase prepares the portable firmware for the STM32 target.
+
+Key items include: a single authoritative board description file that generates headers; splitting `EV_Board` into narrow per-subsystem interfaces; ARM cross-build in CMake compiling the portable modules with the strict flags; per-build flash/RAM size and worst-case stack usage reports; confirming the exact MCU and package; generating the STM32CubeMX project; startup, linker script, and clock configuration in CubeMX user sections; watchdog driver and reset-cause logging; and binding the chosen scheduler to the STM32.
+
+## Phase 4: Bring-up (73–82)
+
+This phase brings up the D1 hardware in knowledge-base section 22 order.
+
+Key items include: a bring-up checklist with sign-off records; supervisor, STOP, and latch capture into timestamped safety snapshots; safe output defaults and 5 V / 12 V output drivers with fault telemetry; master current relay with contact feedback and approved shutdown order; USB CDC stack and descriptors; ADC bring-up checking references and raw channels; reed relay matrix at low energy with break-before-make timing; Kelvin current source with enable, current measurement, gain selection, and auto-range; CAN, UART, and RS-485 drivers with transceiver, direction, and termination control; and measured fault-response time from detection to OFF command and to rail collapse on the bench.
+
+## Phase 5: Bench validation (83–84)
+
+This phase validates procedures against real hardware.
+
+Key items include: validating every procedure against known loads and known-good and known-faulty parts, refining thresholds with recorded provenance; and a hardware-in-the-loop test rig that reruns the procedure suite on a real board.
+
+## Phase 6: Technician prototype and Studio (85–97)
+
+This phase matures the technician workflow and Studio experience.
+
+Key items include: USB serial in Electron with an explicit device picker; connection health display and reconnect handling; moving records into a local database with migration; automatic scheduled backups; customer and vehicle records linked to work orders with history; service report generation; the guided workflow (connect, identify, verify safety, measure, test, analyze, diagnose, explain, report); calibration, adapter, and knowledge-package manager screens; live charts from device telemetry and a bus explorer; splitting `app.js` into view modules with ESLint and Playwright UI tests; the local device UI with display, encoder, and menus; an accessibility pass and help pages; and a field feedback loop so new failure modes enter the knowledge system with provenance.
+
+## Phase 7: Production (98–100)
+
+This phase covers manufacturing and release readiness.
+
+Key items include: a bootloader with A/B slots, rollback, and signed images; manufacturing self-test, calibration station, and per-unit traceability; and pre-compliance testing for the chosen standards, a signed Studio installer, and a shop pilot.
+
+## Studio 1.0 roadmap
+
+The Studio 1.0 roadmap tracks milestones from the current 0.3.x toward the first customer-facing release. Key milestones include:
+
+- **0.3.0: Solid foundation** (complete): accounts and licensing, device screen, firmware update check, release pipeline, redesign, manual diagnosis, editions, purchase-to-license flow.
+- **0.4.0: Live accounts and purchase flow** (in progress): Supabase project setup, Shopify store connection, terms and privacy policy, account settings, staging project.
+- **0.5.0: Signed installer and auto-update** (in progress): code signing with Microsoft's cloud signing service, signed installer in CI, upgrade tests, supported systems decision (Windows 10 and 11 only).
+- **0.6.0: First real device** (blocked on hardware): USB CDC on the D1, device serial from MCU unique ID, Studio end-to-end against a real D1, device screen mirror on the real display, progress events and live measurement streaming.
+- **0.7.0: Firmware updates end to end** (blocked on hardware): bootloader with A/B slots and rollback, firmware signing key and release pipeline, Studio install flow with recovery, decision on device-only customer updates.
+- **0.8.0: Approved tests and knowledge** (blocked on hardware and technician review): bench-validated test profiles, technician review of every diagnostic code text, per-unit calibration, knowledge-package manager, release gate that fails on placeholders.
+- **0.9.0: Shop pilot** (beta): pilot with real shops, field feedback loop, user guide and videos, support process, performance testing at limits.
+- **1.0.0: Release** requires all prior milestones, plus the website download page live, legal review complete, and every earlier release's data upgrading cleanly.
+
+## Hardware decisions that unblock the most items
+
+The critical path is set by hardware milestones: exact MCU and package (#69), STOP/latch polarity and independent shutdown (#74, #82), output enable polarity and legal rail combinations (#75), shutdown order under external energy (#76), USB role and isolation (#77), ADC ranges and scaling (#78, #80), relay topology and timing (#79), and adapter identification (#23, #50). Starting owner items early (code signing identity verification especially) keeps them off the critical path.

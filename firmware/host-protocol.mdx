@@ -1,0 +1,203 @@
+---
+title: "EVCore Host Protocol v2: Commands, Tags, and Replies"
+sidebarTitle: "Host Protocol"
+description: "The line protocol between the EVCore Brick and a host such as EVCore Studio, including request tags, END-terminated replies, command reference, and reply formats."
+---
+
+The EVCore host protocol is the line-based interface between the Brick firmware and a host such as EVCore Studio. It is implemented in `firmware/src/evcore_console.c` and `software/evcore-studio/public/transport.js`. The current version is protocol 2. This page describes transport framing, request tags, the full command set, and reply formats.
+
+## Transport and framing
+
+The protocol is written for a byte stream and does not depend on the transport. The intended transport is USB CDC over USB-C, which is not implemented yet (roadmap item 77). Today it runs over the simulator's stdin/stdout.
+
+- A command is printable ASCII (32 to 126), at most 63 bytes, and ends with LF or CRLF.
+- A lone CR, a control byte, or an overlong line makes the whole line invalid.
+- After a receive error the transport calls `EV_ConsoleTransportLost`, which discards input through the next LF.
+- Replies are single lines. The longest reply is `REPORT JSON` (under 2,048 bytes).
+
+## Request tags (protocol 2)
+
+A host prefixes each command with `#` and 1 to 9 digits, then a space:
+
+```text
+#17 STATUS
+```
+
+The device repeats the tag exactly as sent (leading zeros included) on every reply line, and ends the reply with a tagged `END` line:
+
+```text
+> #17 PROFILES
+< #17 profile=1 revision=1 adapter=1 steps=1 valid_for_adapter=1
+< #17 profile=2 revision=1 adapter=2 steps=3 valid_for_adapter=1
+< #17 END
+```
+
+This lets the host know when a multi-line reply is complete, and prevents a late reply to a timed-out request from being mistaken for the answer to a newer one.
+
+Untagged commands behave as protocol 1: no prefix and no `END`, so a person can still type at a terminal. A malformed tag gets the untagged reply `ERR invalid tag`. An invalid or oversized line also returns `ERR invalid or oversized command`, because its tag cannot be trusted. A host waiting for a tagged reply treats either as a timeout, meaning the device state is unconfirmed.
+
+## Commands
+
+| Command | Reply lines | Effect |
+| --- | --- | --- |
+| `INFO` | one `key=value` line | None |
+| `PROFILES` | one line per profile | None |
+| `STATUS` | one status line | None |
+| `SAFETY` | one line: last fault episode and last recovery | None |
+| `CODE <code>` | code line, `meaning=` line, one `check=` line per check; or `ERR unknown code` | None |
+| `REPORT` | status line, one line per sample, optional phase line, one line per fault record | None |
+| `REPORT JSON` | one JSON line, or `ERR no completed report` / `ERR report unavailable` | None |
+| `SCREEN` | what the device's own display shows: header, `title=`, `status=`, one `row=` per visible row, `notice=`, `hint=`; or `ERR no local screen` | None (read only) |
+| `LOG` | one line per retained event | None |
+| `START <id>` | `OK started` or `ERR start denied` | Runs a bounded profile. Refused while busy or faulted |
+| `STOP` | `OK stopped` or `ERR shutdown unconfirmed` | Cancels and removes stimulus. Always accepted |
+| `RESET` | `OK reset` or `ERR reset denied` | Clears a latched fault only if every input is healthy. Never restarts a test |
+| `BOOTLOADER` | `OK bootloader handoff`, `ERR bootloader unsupported` or `ERR bootloader denied` | Safe-state handoff when the board implements it |
+| `HELP` | one line listing commands | None |
+
+Anything else gets `ERR unknown command`. `ERR response unavailable` means a reply could not be formatted within its buffer. That should not happen, and it is reported rather than truncated.
+
+## Reply formats
+
+Fields are space-separated `key=value` pairs. Keys are `[a-z_]+`. The last field may contain spaces (for example `reason=within profile limits`), so parse values up to the next ` key=` boundary.
+
+### INFO
+
+```text
+protocol_version=2 profiles=<n> bootloader=<0|1> execution=device tags=1 firmware=<semver> build=<id> board=<definition> serial=<device serial> knowledge=<version|none> calibration=<version|none>
+```
+
+The identifier fields are `[A-Za-z0-9._-]{1,32}` or `unknown`.
+
+### PROFILES
+
+```text
+profile=<id> revision=<n> adapter=<id> steps=<n> valid_for_adapter=<0|1> name=<text>
+```
+
+`name` is the name the device's screen shows (or `Profile <id>`) and runs to the end of the line.
+
+### STATUS (also the first line of REPORT)
+
+```text
+state=<BOOT|DISARMED|ARMED|FAULT|OUTPUT_ACTIVE> busy=<0|1> outputs=<mask> faults=<latched mask> profile=<id> result=<PASS|FAIL|UNKNOWN> reason=<text> samples=<n>
+```
+
+`reason` reads `not complete` until a test finishes. The bit meanings of `outputs` and `faults` are the `EV_OUT_*` and `EV_FAULT_*` constants in `evcore_safety.h`.
+
+### REPORT sample line
+
+```text
+sample=<index> kind=<0-4> channel=<n> value=<v> min=<v> max=<v> time_ms=<t> flags=<mask> unit=<V|A|ohm|Hz>
+```
+
+Kinds: 0 voltage, 1 current, 2 resistance, 3 frequency, 4 back-EMF. Flags: 1 invalid, 2 clipped, 4 uncalibrated.
+
+### REPORT phase line
+
+```text
+phase_mismatch_percent=<v> limit_percent=<v>
+```
+
+### REPORT fault line (one per record)
+
+```text
+fault=<name> code=<n> category=<safety|instrument|configuration|internal|operator> severity=<info|warning|error|critical> action=<inform|block|shutdown> source=<safety|app|routing|measurement|board|host> time_ms=<t> evidence=<n>
+```
+
+Fault records explain why a test has no conclusion. They describe the instrument, its interlocks, its setup, or the operator, never the device under test. The catalog of codes, names, and evidence meanings is in `firmware/src/evcore_fault.c`. Codes are stable and only ever appended.
+
+### CODE reply
+
+```text
+code=<code> category=<category> status=<draft|reviewed> title=<text>
+meaning=<text>
+check=<text>
+```
+
+This is the same text the device's local screen shows. Vehicle codes (M, S) appear only for FAIL; a result without a conclusion carries only E codes.
+
+### SCREEN
+
+```text
+screen=<home|tests|confirm|running|result|codes|code|info|fault> tone=<neutral|ok|warn|alert> top=<n> total=<n> visible=<n>
+title=<text>
+status=<text>
+row=<text|heading|item> selected=<0|1> text=<text>
+notice=<text>
+hint=<text>
+```
+
+Text fields run to the end of the line. `top` and `total` place the visible window in the page, for a scroll bar. This mirrors the local screen (`firmware/src/evcore_ui.c`) so a host can show it; it cannot press the knob. The knob and the STOP button are physical controls and have no protocol command.
+
+### SAFETY
+
+```text
+state=<state> latched=<mask> trips=<n> trip_valid=<0|1> trip_ms=<t> trip_faults=<mask> trip_from=<state> recovery_valid=<0|1> recovery_ms=<t> recovery_cleared=<mask> recovery_inputs_ms=<t>
+```
+
+A trip is one fault episode; faults added while already faulted accumulate into it. The recovery fields record what the last successful reset cleared and the timestamp of the healthy input snapshot that allowed it.
+
+### LOG
+
+```text
+seq=<n> time_ms=<t> event=<code> detail=<n> value=<v>
+```
+
+Event codes: 0 boot, 1 state, 2 fault, 3 start, 4 sample, 5 result, 6 cancel, 7 reset.
+
+### REPORT JSON (report schema 1)
+
+```json
+{
+  "schema_version": 1,
+  "profile_id": 2,
+  "profile_revision": 1,
+  "result": "PASS",
+  "reason": "within profile limits",
+  "started_ms": 0,
+  "finished_ms": 30,
+  "faults": 0,
+  "samples": [
+    {
+      "kind": 2,
+      "channel": 0,
+      "value": 0.25,
+      "unit": "ohm",
+      "minimum": 0.100000001,
+      "maximum": 1,
+      "time_ms": 10,
+      "flags": 0
+    }
+  ],
+  "phase_comparison": true,
+  "mismatch_percent": 0,
+  "mismatch_limit_percent": 10,
+  "fault_records": [],
+  "fault_records_dropped": 0,
+  "diagnostic_codes": [],
+  "versions": {
+    "firmware": "0.1.0",
+    "build": "1a2b3c4",
+    "protocol": 2,
+    "board": "mvp-sim-1",
+    "knowledge": "0.1.0",
+    "calibration": null
+  }
+}
+```
+
+Each `fault_records` entry has the same fields as the REPORT fault line, plus `value` (a number, or `null` when none applies). `fault_records_dropped` counts records that did not fit (at most 8 are kept). Non-finite numbers are never written; a report containing one is refused. `mismatch_percent` is `null` when no comparison applies. `knowledge` is the diagnostic code library version; `calibration` is `null` until that subsystem exists.
+
+## Not yet in the protocol
+
+The following capabilities are planned but not yet implemented:
+
+- Capability discovery (`CAPS`, roadmap item 59)
+- Host lease so a remote-started test stops if the host goes silent (item 58)
+- Progress events (item 60)
+- Live measurement streaming (item 61)
+- Knowledge and calibration queries and uploads (items 62 and 63)
+- Authentication (item 64)
+
+Until then, tests are bounded by device-owned timeouts and the device's local STOP. EVCore Studio requires protocol 2 and rejects older firmware.

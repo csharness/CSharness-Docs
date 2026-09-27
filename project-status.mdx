@@ -1,0 +1,64 @@
+---
+title: "EVCore MVP Status: Implemented vs Remaining Work"
+sidebarTitle: "Project Status"
+description: "What is implemented and host-testable in the EVCore MVP firmware, and what remains for a physical flashable product on STM32H743 hardware."
+---
+
+The EVCore MVP is a host-executable firmware application foundation. It preserves the existing C11 application tree, Safety Manager, sensor diagnostic, build scripts, and CMake configuration. There are no approved board pins, analog limits, clock settings, or MCU package in this workspace. All numeric profiles in the simulator are illustrative.
+
+## What is implemented and host-testable
+
+The following subsystems compile, run, and pass automated tests on a Windows host using Zig 0.13, Clang, or GCC:
+
+| Section | Implemented |
+| --- | --- |
+| **Boot / System** | Safe application initialization, reset-cause type, configurable heartbeat supervisor, watchdog service hook |
+| **Safety** | Latched-fault manager, active faults, freshness checks, explicit reset, output ownership |
+| **Outputs** | Profile-selected 5V / 12V / current-source masks; driver configuration while off; feedback checks |
+| **Routing** | Logical channel validation, two-wire and Kelvin routes, configured break and settle states, fail-off behavior |
+| **Measurement** | Typed, timestamped, and flagged values; freshness checks; calibration helpers; Kelvin V/I analysis |
+| **Motor** | Three-step phase resistance and passive back-EMF sequence, mismatch metric, raw values; Hall sequence analyzer |
+| **Sensors** | Range diagnostic; sweep span and step evaluator; pulse frequency and duty conversion |
+| **CAN** | Classic CAN frame validation, standard and extended IDs, timestamped RX queue, filter, counters, opt-in TX callback |
+| **UART / RS-485** | Bounded byte queues, validated serial configuration, nonblocking opt-in TX adapter |
+| **USB** | Bounded command parser and text report/log interface reusable over a byte transport |
+| **Firmware update** | Safe-state bootloader-entry hook; Studio checks for newer releases on every connection |
+| **UI** | Local screen menus with confirmation, results, diagnostic codes, device info, fault page with reset; display-independent screen model; `SCREEN` mirror; simulated in Studio's Device screen |
+| **Profiles / Adapters** | Copied versioned profiles, logical channel allowlist, adapter-ID match, per-step stimulus and limits |
+| **Logging** | 64-event ring with sequence, time, detail, and value; overwrite counter; history survives safety reset |
+| **Storage / Calibration** | Version, type, generation, length byte-record codec and CRC32; calibration validation |
+| **Diagnostic engine** | Bounded nonblocking three-step runner, cancellation and timeouts, per-step samples and limits |
+
+## What remains for a physical MVP
+
+The following work depends on a reviewed hardware capability map and an STM32Cube-generated project:
+
+| Section | Remaining work |
+| --- | --- |
+| **Boot / System** | MCU startup, linker script, clock setup, reset-cause acquisition, real watchdog, and self-test |
+| **Safety** | Independent hardware shutdown verification and measured response time |
+| **Outputs** | Actual drivers, approved limits, ramp and discharge behavior, GPIO and PWM stimulus generation |
+| **Routing** | Actual relay topology constraints, contact feedback, qualified timing |
+| **Measurement** | ADC, DMA, ADS1115, and AD8226 drivers; scaling, ranges, and calibration acquisition |
+| **Motor** | Physical sampling, rotation-speed normalization, waveform acquisition, validated fault interpretation |
+| **Sensors** | Live sweep capture, timer capture, and UI-guided operator sweep; sensor-specific profiles |
+| **CAN** | STM32 FDCAN configuration, physical bus and error handling, CAN FD support, protocol decoders |
+| **UART / RS-485** | DMA and interrupt drivers, DE turnaround, framing and protocol decoders |
+| **USB** | USB descriptors, CDC transport, and host discovery |
+| **Firmware update** | Bootloader, image transfer, authenticated image verification, flash layout, rollback and recovery |
+| **UI** | Display and encoder drivers, debounce and long-press timing, graphics, final layout for the chosen panel |
+| **Profiles / Adapters** | Real harness identification and approved route and stimulus capability tables |
+| **Logging** | Persistent event storage, report files, and export policies |
+| **Storage / Calibration** | Flash or EEPROM transport, atomic two-slot commit, calibration payload schema and authentication |
+| **Diagnostic engine** | Broader profile library, battery and BMS and controller-specific tests and interpretation |
+
+## Verification summary
+
+As of 2026-09-24, all six executables compiled with the strict warning set (`-Wall -Wextra -Werror -pedantic`) and undefined-behavior trapping. The test results were:
+
+- **1,405** safety checks (including a 65-case fault-injection matrix)
+- **316** legacy diagnostic checks
+- **657** MVP checks
+- **2,378** total assertions, including protocol v2 request-tag framing
+
+CMake 4.4.3 with Ninja (preset `zig`, workspace Zig toolchain) configured, built all targets, and passed all three CTest suites. The Clang static analyzer reports 0 findings across all 21 C sources. No ARM cross-link, physical firmware flash, or hardware test is claimed.

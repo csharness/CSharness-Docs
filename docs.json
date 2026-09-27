@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "name": "Google",
-  "theme": "maple",
+  "name": "EVCore",
+  "theme": "aspen",
   "colors": {
     "primary": "#ef7025",
     "light": "#eec9bc",
@@ -11,79 +11,54 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Knowledge Base",
+        "tab": "Documentation",
         "groups": [
           {
             "group": "Get Started",
             "pages": [
-              "introduction",
+              "index",
               "quickstart",
-              "get-started/account-setup",
-              "get-started/key-concepts"
+              "project-status",
+              "architecture"
             ]
           },
           {
-            "group": "Guides",
+            "group": "EVCore Studio",
             "pages": [
-              "guides/core-workflows",
-              "guides/integrations",
-              "guides/notifications",
-              "guides/data-management"
+              "studio/overview",
+              "studio/accounts-and-licensing",
+              "studio/firmware-updates",
+              "studio/release"
             ]
           },
           {
-            "group": "Configuration",
+            "group": "Firmware",
             "pages": [
-              "configuration/settings",
-              "configuration/authentication",
-              "configuration/permissions",
-              "configuration/environment"
+              "firmware/safety-manager",
+              "firmware/diagnostic-engine",
+              "firmware/host-protocol",
+              "firmware/calibration",
+              "firmware/simulator"
             ]
           },
           {
-            "group": "Help & Support",
+            "group": "Hardware & Safety",
             "pages": [
-              "support/faq",
-              "support/troubleshooting",
-              "support/changelog"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Code Docs",
-        "groups": [
-          {
-            "group": "Overview",
-            "pages": [
-              "code/overview",
-              "code/architecture",
-              "code/conventions"
+              "hardware/baseline",
+              "hardware/open-items",
+              "safety/hazard-analysis",
+              "safety/requirements"
             ]
           },
           {
-            "group": "API Reference",
+            "group": "Engineering",
             "pages": [
-              "code/api/authentication",
-              "code/api/endpoints",
-              "code/api/errors",
-              "code/api/webhooks"
-            ]
-          },
-          {
-            "group": "SDK & Libraries",
-            "pages": [
-              "code/sdk/installation",
-              "code/sdk/usage",
-              "code/sdk/examples"
-            ]
-          },
-          {
-            "group": "Advanced",
-            "pages": [
-              "code/advanced/rate-limits",
-              "code/advanced/security",
-              "code/advanced/versioning"
+              "engineering/testing",
+              "engineering/coding-standard",
+              "engineering/versioning",
+              "engineering/knowledge-database",
+              "engineering/decisions",
+              "engineering/roadmap"
             ]
           }
         ]
