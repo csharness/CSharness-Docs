@@ -3,3 +3,106 @@ title: "Build and Run EVCore Firmware and Studio"
 sidebarTitle: "Quickstart"
 description: "Build the EVCore C11 firmware and run EVCore Studio on Windows. Use PowerShell scripts, VS Code, CMake with Zig, or npm for the Electron desktop app."
 ---
+
+Get the EVCore firmware and Studio running on your Windows workspace in a few steps. You can build the C11 firmware with a workspace-local Zig compiler, Clang, or GCC, then run the test suites and launch EVCore Studio with simulated hardware. No physical board is required.
+
+## Prerequisites
+
+- Windows with PowerShell
+- Node.js 22+ and npm (for EVCore Studio)
+- CMake 4.x and Ninja (optional, for CMake builds)
+- Zig 0.13.0 is available under `.tools` in the repository; no separate download is needed
+
+## Build the firmware
+
+<Steps>
+  <Step title="Run the all-in-one build script">
+    From the repository root in PowerShell:
+
+    ```powershell
+    .\scripts\run-all.ps1
+    ```
+
+    This compiles all six firmware programs, runs three test suites, and executes the scripted simulations. Use `-TestsOnly` to suppress the demo output.
+  </Step>
+  <Step title="Verify before committing">
+    Run the full verification gate to confirm every firmware and Studio check passes:
+
+    ```powershell
+    .\scripts\verify.ps1
+    ```
+
+    Use `-Quick` to skip the CMake rebuild and Electron tests.
+  </Step>
+  <Step title="Run static analysis">
+    Run the Clang static analyzer. It must report zero findings:
+
+    ```powershell
+    .\scripts\analyze.ps1
+    ```
+  </Step>
+</Steps>
+
+## Build with CMake
+
+<CodeGroup>
+
+```powershell Zig toolchain (workspace-local)
+cmake --preset zig
+cmake --build --preset zig
+ctest --preset zig
+```
+
+```powershell Generic CMake
+cmake -S . -B build/cmake
+cmake --build build/cmake --config Debug
+ctest --test-dir build/cmake -C Debug --output-on-failure
+```
+
+</CodeGroup>
+
+CMake reports "Detecting C compiler ABI info - failed" during configuration because Zig rejects the `-Wl,-v` probe flag. This does not affect compilation.
+
+## Build in VS Code
+
+Open the repository folder in VS Code and press **Ctrl+Shift+B** to run the default build task. This executes the same compilation and test sequence as `scripts/run-all.ps1`.
+
+## Run EVCore Studio
+
+<Steps>
+  <Step title="Install dependencies">
+    ```powershell
+    cd software\evcore-studio
+    npm install
+    ```
+  </Step>
+  <Step title="Start the app">
+    ```powershell
+    npm start
+    ```
+
+    This opens EVCore Studio in its own window, starting with clearly labeled simulated data.
+  </Step>
+</Steps>
+
+Alternatively, run `Launch EVCore Studio.cmd` to start the installed dependencies without a terminal.
+
+## Run the integrated simulator
+
+Run the MVP simulator and its tests:
+
+```powershell
+.\scripts\run-mvp.ps1
+```
+
+For an interactive text console, use:
+
+```powershell
+.\scripts\run-mvp.ps1 -Interactive
+```
+
+In interactive mode, time advances with `TICK` (10 ms) or simulated STOP changes. Profiles 1, 2, and 3 simulate an analog sensor, three phase resistances, and passive back-EMF. Use `START 2`, several `TICK` commands, then `REPORT` to inspect raw results. `INFO` and `PROFILES` discover the interface; `REPORT JSON` exports a completed result.
+
+<Note>
+  The interactive simulator must never be used as the scheduling model for a real energized device.
+</Note>

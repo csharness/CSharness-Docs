@@ -1,0 +1,87 @@
+---
+title: "Connect a Device in EVCore Studio"
+sidebarTitle: "Connecting a Device"
+description: "Learn the three EVCore Studio connection modes (in-app demo, firmware simulator, USB device via Web Serial), how simulated data is labeled, and the guided workflow after connecting."
+---
+
+EVCore Studio offers three connection modes so you can explore the interface, test against real firmware logic, or connect a physical EVCore D1. Choose a mode from the connection panel, then follow the guided job workflow to run diagnostics and produce a service report.
+
+## Connection modes
+
+<Steps>
+  <Step title="In-app demo">
+    The fastest way to explore Studio. Synthetic signals and pre-defined results run entirely inside the app with no firmware or device involved. Use this mode for training, UI exploration, or demonstrating the guided job workflow to new technicians.
+  </Step>
+  <Step title="Firmware simulator">
+    Runs the real EVCore firmware on your computer with simulated hardware, bridged through `desktop/firmware-sim.cjs`. This mode gives you the closest behavior to a physical device without hardware, including the firmware's own screen, rotary knob, and STOP button. The simulator's clock advances in real time with 10 ms ticks.
+  </Step>
+  <Step title="USB device">
+    Connects to a physical EVCore D1 over USB-C using Web Serial with Studio's own port picker. The firmware has no USB CDC stack yet, so this path has not been used with physical hardware. The port picker and permissions are already in place in the desktop app.
+  </Step>
+</Steps>
+
+## How simulated data is labeled
+
+Simulated data is labeled everywhere so you never mistake it for a real measurement:
+
+- **On screen:** every telemetry sample, bus frame, and test result shows a `source: 'simulation'` marker.
+- **In saved records:** reports, work orders, and vehicle history flag simulated data explicitly.
+- **On service reports:** the PDF flags simulated data so a customer can see which readings were not taken from a physical device.
+
+The in-app demo and the firmware simulator both produce simulated data. The difference is that the firmware simulator runs the real firmware logic and protocol, while the in-app demo uses synthetic fixtures inside Studio.
+
+## USB port picker
+
+When you choose USB device, Studio shows its own port picker instead of the browser's default dialog. The desktop app intercepts the `select-serial-port` event and sends the list of available ports to the renderer, where Studio renders a custom picker with port name, display name, vendor ID, and product ID. Select a port to connect, or cancel to stay disconnected.
+
+The app requests the `serial` permission only for its own `file://` origin. All other permissions are denied.
+
+## Guided workflow after connecting
+
+After you connect in any mode, the guided job screen walks through a complete service visit:
+
+<Steps>
+  <Step title="Connect">
+    Choose a mode and confirm the device or simulator is ready. The status bar shows state, busy flag, active outputs, and any faults.
+  </Step>
+  <Step title="Identify the vehicle">
+    Select an existing customer and vehicle, or create new ones. Every completed test links to the active work order automatically.
+  </Step>
+  <Step title="Verify safe conditions">
+    A checklist you must confirm before every test. The device enforces its own interlocks; this checklist is an additional technician confirmation.
+  </Step>
+  <Step title="Test">
+    Select a profile, confirm setup, then start. Studio sends the request; the device owns execution and safety. You can stop at any time. When the test completes or aborts, the device produces a report that Studio displays and stores.
+  </Step>
+  <Step title="Review">
+    Readings are shown against limits, with diagnostic codes when available. Instrument and safety events are separated from vehicle findings.
+  </Step>
+  <Step title="Service report">
+    Generate a PDF with shop details, customer, vehicle, symptom, every test with readings and expected ranges, instrument events, firmware versions, and a signature line. Simulated data is flagged on the report.
+  </Step>
+</Steps>
+
+## Firmware simulator details
+
+The firmware simulator is a Node.js child process that runs `mvp_demo.exe --interactive` (or `mvp_demo` on non-Windows platforms). It bridges the simulator's console lines to the renderer process over IPC. The simulator accepts these host controls, which are separate from firmware protocol commands:
+
+- `ESTOP` and `RELEASE` — press and release the simulated emergency stop
+- `KNOB CW`, `KNOB CCW`, `KNOB PRESS`, `KNOB HOLD` — rotate and press the simulated front-panel knob
+- `TICK` — sent automatically every 10 ms to advance the simulator clock
+- `QUIT` — sent automatically when the simulator stops
+
+Firmware commands are printable ASCII, bounded to 63 characters, and never overlap with host controls. The simulator is not included in customer builds; it is available only in development runs.
+
+## Protocol and transport
+
+All non-demo connections use protocol version 2, a tagged request/reply protocol over the link. The same `ProtocolClient` class runs over both the firmware simulator bridge and USB serial. When connecting, Studio performs a handshake:
+
+1. Sends `INFO` and checks that the device reports protocol version `2` and tagged replies (`tags=1`).
+2. Sends `PROFILES` and lists only profiles marked `valid_for_adapter=1`.
+3. Starts a 750 ms polling loop for `STATUS`, and fetches `REPORT JSON` when a completed test is detected.
+
+If the device reports an older protocol, Studio refuses to connect and asks you to update the firmware.
+
+## Safety note
+
+The device must enforce every interlock itself. Closing Studio or losing the USB connection never confirms that physical outputs are off. If you are connected to real hardware, use the device's local STOP button whenever needed.

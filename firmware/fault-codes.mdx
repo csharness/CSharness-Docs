@@ -1,0 +1,143 @@
+---
+title: "EVCore Fault Codes: Catalog, Latching, and Diagnostic Reference"
+sidebarTitle: "Fault Codes"
+description: "Reference for EVCore firmware fault codes and diagnostic codes. Covers the fault-code catalog in evcore_fault.c, how faults latch and clear through the Safety Manager, and the diagnostic code data in knowledge/diagnostic-codes.json."
+---
+
+EVCore uses a stable numeric fault-code catalog to describe instrument, safety, configuration, and operator events. Faults are recorded in the firmware, surfaced to the host through the communications protocol, and mapped to human-readable diagnostic codes in the knowledge base. This page lists every code, explains how faults latch and clear, and shows how to read the evidence fields that accompany each record.
+
+## Fault categories and severities
+
+Every fault has a category, a severity, and an action that the firmware takes automatically.
+
+| Category | Meaning |
+| --- | --- |
+| Safety | An interlock tripped: STOP, latch, external energy, limits, or stale inputs |
+| Instrument | The Brick's own output, routing, or measurement path misbehaved |
+| Configuration | A profile, adapter, or board configuration was rejected |
+| Internal | The firmware detected an impossible internal state |
+| Operator | An operator action, such as cancelling a test |
+
+| Severity | Meaning |
+| --- | --- |
+| Info | Recorded only; does not affect the test |
+| Warning | Recorded only; does not affect the test |
+| Error | Ends the test without a conclusion; outputs turn off |
+| Critical | Safety manager latches FAULT; explicit reset is required |
+
+| Action | Effect |
+| --- | --- |
+| Inform | Recorded only |
+| Block | The test ends without a conclusion; outputs turn off |
+| Shutdown | Safety manager latches FAULT; explicit reset is required |
+
+## Safety-manager fault codes (1 to 12)
+
+These codes map one-to-one to the latched safety bits managed by the Safety Manager. Each bit set in the safety flags produces a corresponding fault record. See [/firmware/safety-manager](/firmware/safety-manager) for the state machine, interlock rules, and reset behavior.
+
+| Code | Name | Category | Severity | Action | Meaning |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `stop` | Safety | Critical | Shutdown | The STOP control was active, so the test stopped and outputs turned off |
+| 2 | `hardware_latch` | Safety | Critical | Shutdown | The hardware safety latch removed permission for outputs |
+| 3 | `external_energy` | Safety | Critical | Shutdown | Voltage from the vehicle was detected where the test requires it absent |
+| 4 | `overcurrent` | Safety | Critical | Shutdown | Current exceeded the device's limit and outputs turned off |
+| 5 | `safety_measurement_invalid` | Instrument | Error | Shutdown | The device's own measurement path reported invalid data |
+| 6 | `safety_route_invalid` | Instrument | Error | Shutdown | The device's internal routing could not be confirmed |
+| 7 | `safety_config_invalid` | Configuration | Error | Shutdown | The output or profile configuration was rejected by the safety manager |
+| 8 | `self_test_failed` | Instrument | Critical | Shutdown | The device's self-test did not pass |
+| 9 | `safety_inputs_stale` | Safety | Error | Shutdown | The safety monitoring data became stale, so outputs turned off |
+| 10 | `overvoltage` | Safety | Critical | Shutdown | Voltage exceeded the device's limit and outputs turned off |
+| 11 | `internal` | Internal | Critical | Shutdown | The device detected an impossible internal state and turned outputs off |
+| 12 | `watchdog` | Internal | Critical | Shutdown | The device's supervision detected a timing failure and turned outputs off |
+
+The evidence field for codes 1 to 12 contains the full latched safety mask at the time the fault was recorded. This mask is the same value returned by `EV_SafetyGetLatchedFaults`.
+
+## Test-runner fault codes (32 to 41)
+
+These codes are produced by the diagnostic engine and application modules during a test sequence. They describe instrument behavior, measurement problems, and operator actions rather than safety interlocks.
+
+| Code | Name | Category | Severity | Action | Meaning | Evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| 32 | `off_unconfirmed` | Instrument | Critical | Shutdown | The device could not confirm that its outputs turned off before changing connections | Output mask still commanded (0 if feedback disagreed) |
+| 33 | `route_failed` | Instrument | Error | Shutdown | The device could not set up its internal test connections | Test step index |
+| 34 | `configure_rejected` | Configuration | Error | Block | The device rejected this test's setup before measuring | Test step index |
+| 35 | `output_denied` | Safety | Error | Block | The safety manager did not allow the test's outputs to turn on | Requested output mask |
+| 36 | `output_mismatch` | Internal | Error | Block | The outputs did not match what the test expected | Commanded output mask |
+| 37 | `measurement_read_failed` | Instrument | Error | Block | The device could not read the measurement | Board read status |
+| 38 | `measurement_unusable` | Instrument | Error | Block | The measurement was invalid, out of date, or from the wrong channel | Sample flags; value is the rejected sample |
+| 39 | `step_timeout` | Instrument | Error | Block | A test step did not finish in time | Test step index |
+| 40 | `cancelled` | Operator | Info | Inform | The test was cancelled before it finished | Test step index |
+| 41 | `sequence_corrupt` | Internal | Critical | Shutdown | The device detected a corrupted test sequence and turned outputs off | Application state value |
+
+Codes 32 to 41 are defined in `firmware/src/evcore_fault.c` and surfaced through the fault list API in `firmware/include/evcore_fault.h`.
+
+## How faults latch and clear
+
+The Safety Manager latches faults into a retained bitmask. Once any fault condition is detected, the state transitions to FAULT, outputs are commanded off, and the fault bits remain set until an explicit reset. Calling `EV_SafetyResetFault` requires all current inputs to be healthy and fresh; it clears the latch and returns the manager to DISARMED with outputs still off. Reset does not re-arm or restore prior outputs. Disarm does not clear a fault. New faults that arrive while already in FAULT are added to the same latched bitmask.
+
+The fault list stores the first record for each unique code and drops duplicates. The list holds up to `EV_FAULT_RECORDS` (8) entries. If the list is full, additional distinct codes are counted in `dropped` and discarded. The list is cleared by `EV_FaultListClear` and populated by `EV_FaultListAdd` or `EV_FaultListAddSafetyBits`, which maps each set safety bit to its matching code automatically.
+
+## Diagnostic code mapping
+
+The knowledge base file `knowledge/diagnostic-codes.json` maps firmware fault codes to human-readable diagnostic codes used in EVCore Studio reports. E-series codes describe the instrument, its interlocks, setup, or operator actions. M-series and S-series codes describe findings about the device under test and are documented separately in the measurement and sensor modules.
+
+| Diagnostic code | Fault code | Title |
+| --- | --- | --- |
+| E-001 | 1 | Stopped by STOP |
+| E-002 | 2 | Hardware safety latch |
+| E-003 | 3 | External voltage present |
+| E-004 | 4 | Overcurrent |
+| E-005 | 5 | Instrument measurement invalid |
+| E-006 | 6 | Instrument routing invalid |
+| E-007 | 7 | Configuration invalid |
+| E-008 | 8 | Self-test failed |
+| E-009 | 9 | Safety inputs not updating |
+| E-010 | 10 | Overvoltage |
+| E-011 | 11 | Internal error |
+| E-012 | 12 | Watchdog |
+| E-032 | 32 | Outputs not confirmed off |
+| E-033 | 33 | Connection routing failed |
+| E-034 | 34 | Test setup rejected |
+| E-035 | 35 | Output permission denied |
+| E-036 | 36 | Output state mismatch |
+| E-037 | 37 | Measurement could not be read |
+| E-038 | 38 | Measurement unusable |
+| E-039 | 39 | Test step timed out |
+| E-040 | 40 | Test cancelled |
+| E-041 | 41 | Internal sequence error |
+
+All diagnostic codes in the E series are marked draft in `knowledge/diagnostic-codes.json` and have not yet been reviewed by a technician.
+
+## Record structure
+
+A fault record contains the following fields:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `code` | `EV_FaultCode` | The stable numeric code from the catalog |
+| `source` | `EV_FaultSource` | Which subsystem reported the fault: safety, app, routing, measurement, board, or host |
+| `time_ms` | `uint32_t` | Timestamp from the safety clock when the fault was recorded |
+| `evidence` | `uint32_t` | Code-specific detail; see the Evidence column above |
+| `value` | `float` | Related measured value, or NAN when none applies |
+
+The record is defined in `firmware/include/evcore_fault.h` as `EV_FaultRecord`. The list `EV_FaultList` holds up to 8 records plus a `dropped` counter.
+
+## API reference
+
+The fault module provides catalog lookup and list management. All names use the `EV_Fault` prefix.
+
+| Function | Purpose |
+| --- | --- |
+| `EV_FaultLookup(code)` | Return the `EV_FaultInfo` for a code, or NULL if unknown |
+| `EV_FaultCategoryName(category)` | Return the string name of a category |
+| `EV_FaultSeverityName(severity)` | Return the string name of a severity |
+| `EV_FaultActionName(action)` | Return the string name of an action |
+| `EV_FaultSourceName(source)` | Return the string name of a source |
+| `EV_FaultListClear(list)` | Empty a fault list |
+| `EV_FaultListAdd(list, code, source, time_ms, evidence, value)` | Add one record; keeps the first occurrence per code; returns false if the list is full or the code is unknown |
+| `EV_FaultListAddSafetyBits(list, flags, time_ms)` | Add one record per set safety bit; evidence is the full mask |
+| `EV_FaultListHasCategory(list, category)` | Return true if the list contains any fault in the given category |
+
+## Implementation status
+
+The fault-code catalog, lookup functions, list management, and diagnostic-code mapping are fully implemented and host-testable. The host simulator exercises fault recording, deduplication, list saturation, safety-bit expansion, and category queries. STM32H743 target integration, on-device safety-bit latching from physical inputs, and field-validated diagnostic-code descriptions remain future work.

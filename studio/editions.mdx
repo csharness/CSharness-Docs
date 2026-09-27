@@ -1,0 +1,72 @@
+---
+title: "EVCore Studio Editions: Studio and Studio Pro"
+sidebarTitle: "Editions"
+description: "Compare EVCore Studio and Studio Pro editions, how licenses activate features, what manual diagnosis includes, and how to upgrade."
+---
+
+EVCore Studio ships as a single download. The edition you see is decided by the signed license on your account, so you can switch between Studio and Studio Pro without reinstalling. Studio is available now as a pre-order with beta access. Studio Pro requires an EVCore D1 device and is not for sale yet.
+
+## Who each edition is for
+
+- **Studio:** any repair shop that wants structured manual diagnosis, work orders, and PDF service reports without a device.
+- **Studio Pro:** shops that own an EVCore D1 and want automated tests, live data, device screen mirroring, bus frame inspection, firmware updates, and the AI mechanic assistant when it ships.
+
+## Edition comparison
+
+| Feature | Studio | Studio Pro |
+| --- | --- | --- |
+| Manual diagnosis (complaint, symptoms, readings, findings) | Yes | Yes |
+| Clean PDF diagnostic report | Yes | Yes |
+| Work orders, customers, vehicles | Yes | Yes |
+| Tests run on the D1, live data, device screen, bus frames, firmware updates | No | Yes |
+| Diagnostic code library in Studio | No | Yes |
+| AI mechanic assistant | No | Yes, when built |
+
+A Pro feature opened on a Studio license shows what it does and how to upgrade; it never starts anything. Changing edition never needs a reinstall.
+
+## How the license decides the edition
+
+After you sign in, Studio calls `issue-license` on the account server. The server returns a signed license document with a `plan` field: `studio` or `pro`. Studio reads this field and turns features on or off. The license is signed with an Ed25519 private key that exists only on the server, so Studio can verify it offline and cannot be fooled by an edited file.
+
+A D1 purchase includes three months of Studio Pro, granted by hand at purchase time. After that you renew Pro or continue on Studio. The D1 itself keeps working with its own screen whatever the license says.
+
+## Manual diagnosis in both editions
+
+Studio and Studio Pro share the same manual diagnosis workflow. The technician records:
+
+- vehicle and customer, plus the customer's complaint
+- symptoms observed
+- readings: what was measured, where, the value and unit, and optionally the expected range with its source (for example, "manufacturer service manual, p. 12")
+- findings: each marked observed, suspected, or confirmed (and how it was confirmed)
+- work recommended or done, and parts
+
+Studio never supplies limits or thresholds of its own for manual readings. A reading is compared only against the range the technician entered, and the report shows that range's source. Readings are labeled "entered by the technician, not measured by EVCore." Suspected causes are never shown as confirmed failures.
+
+When the curated knowledge library exists, reference ranges can come from it with provenance.
+
+## Billing and purchase flow
+
+Studio and Studio Pro subscriptions are sold through the Shopify store. The current pre-order SKU is `EVC-STUDIO-6M` (Studio, 6 months). Studio Pro is not for sale yet because the D1 hardware is not ready.
+
+The purchase flow works like this:
+
+1. Buy a license at csharness.com (Shopify checkout).
+2. Shopify sends the paid order to the `shopify-orders` Edge Function via a signed webhook.
+3. The function records the order and creates the license immediately if the email already has an EVCore account. If not, the grant waits and is applied when that email signs up.
+4. Download Studio, sign in with the order's email, and the edition the license gives opens automatically.
+
+Rules:
+
+- Pre-order with beta access: the buyer gets the current beta at once and the license term starts the day they buy. No free trial.
+- Refunds: full refund within 14 days of purchase. Refund a Studio order with **Cancel order** (with a refund) so the cancellation webhook revokes the license. A refund alone does not end it.
+- Test orders: Shopify Payments test mode licenses only staff accounts.
+
+For details on account creation, sign-in, offline use, and device registration, see [Accounts and Licensing](/studio/accounts-and-licensing).
+
+## Open items
+
+The following business decisions are still pending:
+
+- Monthly and yearly prices for Studio and Studio Pro.
+- Which Shopify subscription app to use for recurring billing.
+- What happens to a lapsed subscription's local records. The proposal is that records stay readable and exportable, but creating new reports needs an active license.

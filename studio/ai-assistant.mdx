@@ -1,0 +1,88 @@
+---
+title: "EVCore Studio AI Mechanic Assistant: What It Does and How It Works"
+sidebarTitle: "AI Assistant"
+description: "The EVCore Studio AI mechanic assistant answers e-mobility diagnostic questions using curated knowledge and device results. Learn what it can do, its safety boundaries, data handling, and current status."
+---
+
+The AI mechanic assistant in EVCore Studio answers technicians' e-mobility diagnostic questions using a curated knowledge library and the results from your connected device. It cites its sources, states its confidence, and never contradicts a device safety fault or instrument fault. The assistant is planned for release as part of Studio 1.0.0 and is not yet available in current builds.
+
+## What the assistant can do
+
+The assistant is designed to help technicians interpret diagnostic evidence and decide on next steps. It operates under these capabilities:
+
+- **Answer from curated knowledge.** It retrieves relevant passages from the CS Harness knowledge library, which includes the diagnostic code library, bench-validation findings, knowledge articles, and manufacturer manuals and service bulletins. Each source records the permission that covers it, so a single source can be withdrawn if its terms change.
+- **Use device evidence.** It reads the current test results, diagnostic codes, vehicle make and model, and the device's firmware and board versions to ground its answers in what the device actually measured.
+- **Cite sources.** Every factual claim references a library source or the device's own measurement. A claim without a source is labeled as general guidance.
+- **State confidence honestly.** Answers say how sure they are and why. With thin evidence, the answer suggests the next measurement to take rather than guessing a diagnosis.
+- **Stay in scope.** It answers e-mobility diagnosis and repair questions only. It declines anything else.
+
+## What the assistant cannot do
+
+These boundaries are enforced by design and by the answer rules:
+
+- **Never control the device.** The assistant cannot start tests, change outputs, or send any command to the device. It reads results; the technician acts.
+- **Never bypass safety.** It never suggests bypassing an interlock, working on an energized high-voltage system outside the approved procedure, or disabling STOP. High-voltage work carries a warning.
+- **Never contradict device faults.** A device result or diagnostic code outranks anything general. The assistant never contradicts a device safety fault or instrument fault.
+- **Never search the open web.** Answers come only from the curated library and device evidence. No open web search is used.
+- **Never invent limits or thresholds.** It does not supply test limits of its own. Limits come from validated profiles and the knowledge library.
+
+## Data handling and consent
+
+The assistant sends only specific, limited data with each question. Studio shows exactly what is sent the first time the assistant is opened, and the assistant stays off until the technician agrees.
+
+### What a question sends
+
+| Data | Sent? | Notes |
+| --- | --- | --- |
+| Question text | Yes | The technician's question |
+| Current test results | Yes | Device measurements and diagnostic codes |
+| Vehicle make and model | Yes | From the active work order |
+| Device firmware version | Yes | From the connected device |
+| Device board version | Yes | From the connected device |
+| Customer names | **No** | Never included |
+| Contact details | **No** | Never included |
+| Addresses | **No** | Never included |
+| Free-text notes | **No** | Never included |
+
+### Analytics consent
+
+On first launch, Studio asks whether the shop will share usage analytics and anonymized test data to help improve EVCore. This is off unless the shop chooses it, and it can be changed at any time in Settings. Analytics never includes customer identity. This consent is separate from the assistant: either can be used without the other.
+
+### Where it runs
+
+The assistant runs as a server function on the account service. The AI provider key stays on the server and never reaches Studio. Only signed-in, licensed accounts can use it.
+
+## Monthly question allowance
+
+The assistant is included in the Studio license with a monthly question allowance per account. The current planned allowance is **300 questions per account per month**, enforced on the server. This may be revisited based on pilot usage data.
+
+## Safety and quality gates
+
+The assistant is managed by measuring rather than by guaranteeing "a perfect answer every time." Before every release, a fixed set of real repair questions with technician-approved answers is scored. A release that scores worse than the last is not shipped.
+
+The owner reviews library sources, diagnostic code texts, and the evaluation set before the assistant goes live.
+
+## Implementation status
+
+The AI mechanic assistant is **planned** and not yet implemented in current Studio builds. It is scheduled for the 0.4.x to 0.9.0 development phase, after the live account service is running (Studio 0.4.0), and will be evaluated with pilot shops in 0.9.0. It is required for the 1.0.0 release.
+
+| Milestone | Item | Status |
+| --- | --- | --- |
+| S-51 | Knowledge library format with provenance | Planned |
+| S-52 | Ingest sources (diagnostic codes, knowledge files, bench findings, manufacturer manuals) | Planned, waiting on owner to supply files |
+| S-53 | Retrieval index and answer function on account service | Planned, blocked on S-12 (live Supabase project) |
+| S-54 | Answer rules (cite sources, state confidence, evidence first, safety refusals) | Designed, not implemented |
+| S-55 | Assistant panel in Studio (next to results and in guided job) | Designed, not implemented |
+| S-56 | First-use consent screen showing exactly what is sent | Designed, not implemented |
+| S-57 | Monthly question allowance enforced on server | Planned |
+| S-58 | Answer feedback (helpful / wrong) feeding review queue | Planned |
+| S-59 | Evaluation set of real repair questions with technician-approved answers | Planned, waiting on owner (technician review) |
+| S-60 | Privacy policy and terms updated for assistant and analytics | Planned, waiting on owner (legal review) |
+
+The assistant is a **Studio Pro** feature. It will not be available in the base Studio edition. See [Studio Editions](/studio/editions) for the full feature comparison.
+
+## Related decisions and documentation
+
+- [Decision 0005: AI mechanic assistant and data sharing](/engineering/decisions) (source: `docs/decisions/0005-ai-mechanic-assistant.md`)
+- [Studio 1.0 roadmap](/engineering/roadmap) for milestone tracking
+- [Knowledge database schema](/engineering/knowledge-database) and [adding knowledge](/engineering/knowledge-database) for how the library is built

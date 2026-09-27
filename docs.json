@@ -26,8 +26,12 @@
             "group": "EVCore Studio",
             "pages": [
               "studio/overview",
+              "studio/connecting-a-device",
+              "studio/editions",
               "studio/accounts-and-licensing",
               "studio/firmware-updates",
+              "studio/ai-assistant",
+              "studio/feedback",
               "studio/release"
             ]
           },
@@ -38,7 +42,8 @@
               "firmware/diagnostic-engine",
               "firmware/host-protocol",
               "firmware/calibration",
-              "firmware/simulator"
+              "firmware/simulator",
+              "firmware/fault-codes"
             ]
           },
           {
@@ -58,7 +63,8 @@
               "engineering/versioning",
               "engineering/knowledge-database",
               "engineering/decisions",
-              "engineering/roadmap"
+              "engineering/roadmap",
+              "engineering/changelog"
             ]
           }
         ]

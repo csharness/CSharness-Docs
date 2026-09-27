@@ -1,0 +1,93 @@
+---
+title: "EVCore Changelog: Firmware and Studio Releases"
+description: "Complete version history for EVCore firmware and EVCore Studio. Track notable changes, new features, and safety milestones from initial import through the latest release."
+sidebarTitle: "Changelog"
+---
+
+This page lists every notable change to the EVCore firmware and EVCore Studio, newest first. EVCore versions its components independently; see the [versioning policy](/engineering/versioning) for the rules that govern each identifier.
+
+No hardware release has been made yet. Everything below runs on the host simulator.
+
+<Update label="0.3.2" description="2026-09-26">
+  EVCore Studio 0.3.2. Release notes as shown to Studio users.
+
+  - Report a problem or ask for a feature from **Help**: it opens csharness.com/pages/feedback, where you sign in with your Studio account and follow our answers.
+</Update>
+
+<Update label="0.3.1" description="2026-09-26">
+  EVCore Studio 0.3.1. Release notes as shown to Studio users.
+
+  - Studio is on pre-order with beta access: buy a license at csharness.com and use Studio the same day. There is no free trial, so the sign-in and account screens now say to create the account with the email you order with.
+</Update>
+
+<Update label="0.3.0" description="2026-09-25">
+  EVCore Studio 0.3.0. Release notes as shown to Studio users.
+
+  - Two editions in one download: **Studio** for diagnoses without the device, **Studio Pro** for the EVCore D1. Your license decides which one opens.
+  - New **Diagnoses** screen: record the complaint, symptoms, measurements against the expected range you enter, and findings, then save a clean PDF diagnostic report for the customer. The report is Final as soon as a finding is marked Confirmed with how it was confirmed, and says DRAFT until then.
+  - A new look: the work order and device always in view, a fixed STOP button, a status bar, and a dark theme (a light theme is in Settings).
+  - Confirm your email address and reset your password with a code sent by email.
+  - Studio now installs with a standard Windows installer and updates itself. Updates install only when you restart Studio, never during a test.
+</Update>
+
+<Update label="Unreleased" description="Firmware 0.1.0 / host protocol 2 / report schema 1 / Studio 0.3.0">
+  ### Safety and verification
+
+  - Numbered safety requirements SR-01 to SR-19, traced to tagged tests and checked by `scripts/trace-requirements.mjs` (roadmap #7).
+  - Draft hazard analysis with 16 hazards mapped to controls (roadmap #6).
+  - Generated fault-injection matrix: 5 safety states x 13 fault sources (roadmap #8).
+  - Seeded fuzz tests for the command parser, record decoder and report JSON writer (roadmap #9).
+  - Strict warning set with `-Werror`, undefined-behavior trapping, Clang static analysis, and a written coding standard.
+  - `scripts/verify.ps1` runs every gate, and GitHub Actions runs it on every push with coverage and a packaged Studio build (roadmap #1-#3).
+
+  ### Firmware
+
+  - Local screen (roadmap #95, in part): menus for the device's own display and rotary encoder (`evcore_ui`): run a test through a confirmation page that opens on Cancel, stop a test with the knob, results with diagnostic codes, code lookup, device info, and a fault page that only an accepted reset leaves. The screen follows tests started over USB. Display independent: a screen model a display driver will draw. New read-only `SCREEN` command; `PROFILES` reports profile names. New hazard H-17 and requirements SR-24 and SR-25, tested by `tests/ui_tests.c`.
+  - On-device diagnostic code library (decision 0003): 30 codes (motor M, sensor S, instrument E), generated from `knowledge/diagnostic-codes.json` with validation. Reports carry `diagnostic_codes`; `REPORT` lists them; `CODE <id>` returns the text for the local screen. Vehicle codes only for FAIL (SR-23). All code text is marked draft until technician review.
+  - Structured fault records (roadmap #13-#15): a catalog of 22 stable codes, each with a category (safety, instrument, configuration, internal, operator), severity, action and evidence meaning. Every test without a conclusion names its cause in the report (`fault_records` in JSON, `fault=` lines in `REPORT`). Finished reports are never edited afterwards.
+  - The safety manager records each fault episode (time, faults, starting state) and the evidence for each recovery; new `SAFETY` command. The `RESET` log event now carries the cleared faults.
+  - `INFO` and `REPORT JSON` report firmware, build, protocol, board definition, knowledge and calibration versions (roadmap #10).
+  - Host protocol 2: optional `#<tag>` request tags; tagged replies end with `END`. Untagged commands behave as protocol 1.
+  - Tests now cover measurements returned for the wrong channel or quantity.
+
+  ### EVCore Studio
+
+  - Device screen: the firmware simulator's own screen, knob and STOP button, so the device's local interface can be used and tested without hardware. With a USB device it mirrors the screen.
+  - Firmware update check on every connection to a device (decision 0004): Studio asks the account service for newer releases of the device's board and shows a notice, marked required when CS Harness flags a safety or security fix. Installing from Studio waits for the bootloader (#98).
+  - Accounts and licensing (decision 0003). Studio requires sign-in with an account that holds a Studio license; device-only customers never need an account. Screens for sign-in, create account, password reset, and each blocked state (email not confirmed, no license, needs a license check, clock set back). The license is signed on the server, checked offline with a built-in public key, works 30 days without internet, and lists the account's device serials: Studio starts tests only on registered USB devices. Session and license are stored encrypted with the operating system's user key. Only the account and license are online.
+  - Email confirmation screen: after creating an account (or signing in before confirming), Studio asks for the code from the confirmation email. The right code confirms the address and signs in; "Send a new code" requests another (one a minute). The email template with the code is in `server/supabase/templates/confirm-signup.html`.
+  - The link in account emails lands on the website's "Account confirmed" page (`emailRedirect` in `license-config.json`), which tells the person to return to Studio and clears the sign-in token from the address bar; the store's password page does the same until launch. Tested end to end against the live account service.
+  - Password reset by code: "Forgot password?" emails a code; Studio asks for it and the new password, then signs in. A refused new password can be replaced without a new code. Template in `server/supabase/templates/reset-password.html`.
+  - Account emails are sent as [support@csharness.com](mailto:support@csharness.com) through Resend (custom SMTP), with the code templates installed.
+  - Editions (decision 0006): one download, two licenses. **Studio** (software only) has manual diagnosis, work orders, customers and reports; **Studio Pro** adds everything that works with the EVCore D1. The signed license's plan switches features; Pro screens on a Studio license explain the upgrade and start nothing. New accounts get a 14-day Studio trial; a D1 purchase includes three months of Pro. Server: `pro` license product, `grant_license(email, product, until, note)`, and the plan choice shared by the server function and Studio (`choosePlan`).
+  - Manual diagnosis: complaint, symptoms, readings compared only against the range the technician enters (with its source), findings marked observed, suspected or confirmed (with how), and a clean diagnostic report PDF. Readings are labeled as entered by the technician.
+  - Redesign: tool-style frame with the work order and device in the top bar, a fixed STOP button and a status bar; plain page titles; dark CS Harness theme with a light option; line icons; instrument-style Bench and a three-column Tests screen.
+  - Release (roadmap S-20, S-21, S-46, S-48): Windows installer built with electron-builder (per-user, keeps records on uninstall), auto-update from the public releases repository (installs only on restart or quit; the page refuses while a test runs), `scripts/publish-studio.ps1` for publishing (refuses unsigned installers), and a `release-studio` workflow that builds and tests `studio-v*` tags. See `docs/release.md`. Studio version 0.3.0.
+  - Purchase to license (decision 0008): Shopify **Order payment** and **Order cancellation** webhooks call the new `shopify-orders` Edge Function (signature-checked; addresses and payment details are never passed on). `record_shop_order` maps SKUs (`shop_products`) to licenses, licenses the buyer's EVCore account at once or when that email signs up, is idempotent for webhook retries, and revokes licenses of cancelled orders. `grant_mode` = `staff_only` holds grants from outside CS Harness while the store is public for testing. Studio launch: migration `20260926050000_studio_launch.sql` licenses every paid order (test orders only for staff), and the Software and Download pages switch Studio from pre-order to buy-now. Download page on the website (download, install, sign in with the order's email; FAQ) and an order-confirmation email block. Studio's sign-in and no-license screens now explain the website purchase, the trial and the automatic license, with Buy and Help links. Installers build outside OneDrive (`%LOCALAPPDATA%\EVCore\studio-build`), which fixes EPERM build failures there.
+  - Knowledge database (decision 0007, `docs/knowledge-schema.md`, roadmap 17 to 20): vehicles, components, connectors, communication protocols and vendor error-code lists as JSON in `knowledge/`, with provenance, confidence and status on every entry, and hypothesis, observed or verified on every protocol message, signal and code. `scripts/knowledge.mjs` validates, builds the Studio bundle, searches, scaffolds drafts, decodes candump captures (unknown ids, periods, changing bytes) and publishes to a staff-only Supabase mirror (migration `20260926000000_knowledge.sql`, `knowledge` workflow). Studio ships reviewed and validated entries in a new **Vehicle library** (both editions: search, error-code lookup, details with sources) and shows the library version in Settings. Starts empty; fictional examples in `knowledge/examples/` for tests. Developer articles in `knowledge/articles/`.
+  - D1 emulator (`docs/d1-emulator.md`): a standalone Windows program that behaves like an EVCore D1 on a serial port, running the real firmware on the simulated board in real time, with operator commands for STOP, the knob, simulated vehicle conditions and instrument faults. It identifies as board `mvp-sim-1` with a `SIM-` serial; Studio connects it as the source "D1 emulator" and labels its data as simulated. Core tests in `tests/emulator_tests.c`, an end-to-end gate (`npm run test:emulator`), and `scripts/package-emulator.ps1` for a test-computer zip. Internal only.
+  - Customer builds: every installer is a customer build without the in-app demo or the firmware simulator; Studio then offers only an EVCore D1 over USB, and the Bench, Guided job, Device screen, Settings and Help screens drop the simulator options. GitHub releases hold customer builds only; the internal update channel is removed, and internal testing runs from the source code. The desktop smoke test checks the customer build refuses simulation.
+  - Shows diagnostic codes with their meaning and checks on results, reports and service reports.
+  - Rebuilt as an MVP suite (roadmap #85, #87-#90, #94 in part):
+    - Records are files in the user-data folder, written atomically with the previous version kept; a daily automatic backup, plus back up now and restore. Limits raised from 30 reports and 100 work orders to 5,000 each. Studio 0.1 records migrate automatically.
+    - Customers and vehicles, linked to work orders; each vehicle's test history across visits.
+    - Work orders drive testing: the active work order receives every completed test.
+    - Service report PDF for the customer, rendered with JavaScript disabled.
+    - Portable Windows release (`scripts/package-studio.ps1`): app icon, bundled firmware simulator, smoke test run against the packaged app, zip published by CI on every push. Studio version 0.2.0.
+    - Help screen (workflow, reading results, safety boundaries, keyboard, data) and a getting-started card on the dashboard (roadmap #96 in part).
+    - Guided job (roadmap #91): connect, identify, verify safety with a checklist that must be completed before each test, test, review and report, following knowledge base section 1.
+    - Connections: in-app demo, the real firmware as a local simulator, and USB with Studio's own port picker. Simulated data is labeled on screen, in records and on reports.
+    - Code split into core modules and one module per screen, behind a fixed preload API with sender-checked IPC.
+  - Shows instrument and safety events apart from findings about the device under test, and explains a no-conclusion result by its cause ("Instrument problem: no finding about the component", "Safety interlock stopped the test", and so on). Validates fault records strictly; the simulator emits the firmware's codes.
+  - Records the device's version identifiers with each saved report and shows them in Device & settings.
+  - Serial transport speaks protocol 2 and matches replies by tag; it rejects older firmware.
+  - Import and restore of work-order backups and session archives.
+
+  ### Project
+
+  - Adopted the CS Harness knowledge base as the engineering direction; added `CLAUDE.md`, the roadmap, the proposed standards decision, and CMake presets.
+</Update>
+
+<Update label="2026-09-24: initial import">
+  Portable C11 firmware MVP (safety manager, diagnostics, routing, measurement, communications, console, storage, supervision) with host simulation and tests, and EVCore Studio 0.1 (Electron desktop app running on simulated data).
+</Update>

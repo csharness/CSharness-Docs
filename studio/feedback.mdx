@@ -1,0 +1,110 @@
+---
+title: "EVCore Studio Bug Reports and Feature Requests"
+sidebarTitle: "Bug Reports & Feedback"
+description: "How to submit bug reports and feature requests for EVCore Studio, what gets included in a report, and how CS Harness tracks and replies to your feedback."
+---
+
+EVCore Studio provides a built-in feedback channel so you can report bugs, request features, and follow CS Harness replies. You submit reports through the CS Harness website at `csharness.com/pages/feedback`, signing in with the same CS Harness account you use in Studio. This page explains how to open the feedback page from Studio, what information is included in a report, and how the request lifecycle works.
+
+## Opening the feedback page from Studio
+
+You can reach the feedback page in two ways:
+
+1. **From Studio Help screen:** Open **Help > Report a problem or request a feature**. Studio opens your default browser to `csharness.com/pages/feedback` and automatically fills in your Studio version.
+2. **Directly on the website:** Go to [csharness.com/pages/feedback](https://csharness.com/pages/feedback) and sign in with your EVCore Studio account.
+
+If you do not have an account yet, you can create one, confirm it, and reset your password directly on the feedback page. You do not need to open Studio first.
+
+## What gets included in a report
+
+When you submit a report, the following information is sent:
+
+| Field | Required | Description |
+| --- | --- | --- |
+| Type | Yes | Bug or feature request |
+| Title | Yes | Short summary (3 to 120 characters) |
+| Details | Yes | Full description (10 to 5,000 characters) |
+| Studio version | Optional | Filled automatically when opened from Studio Help |
+| Screenshots | Optional | Up to 3 images (PNG, JPEG, or WebP, 5 MB each) |
+
+### Screenshots
+
+You can attach screenshots in two ways:
+
+- **File picker:** Choose up to 3 image files.
+- **Paste:** Copy an image to your clipboard and paste it directly into the details text box.
+
+Screenshots are stored privately in the `support-attachments` storage bucket. Only you and CS Harness staff can view them, using short-lived signed links that expire after one hour.
+
+## How requests are tracked and replied to
+
+After you submit a report, you can follow its status and read replies on the same feedback page. Requests are private: you see only your own requests and the replies to them. CS Harness staff can see all requests and reply or update the status.
+
+### Request statuses
+
+| Status | Meaning |
+| --- | --- |
+| Received | New request, not yet reviewed |
+| Waiting for you | CS Harness needs more information from you |
+| Planned | Accepted for a future release |
+| In progress | Currently being worked on |
+| Fixed in the next update | Fix is ready and will ship in the next release |
+| Released | Fix or feature is now live |
+| Not planned | Will not be implemented |
+
+### Email notifications
+
+You receive email notifications for the following events:
+
+- A staff reply to your request
+- A status change to **Waiting for you**, **Planned**, **Fixed in the next update**, **Released**, or **Not planned**
+
+New requests also email `support@csharness.com` so the team is notified immediately. Emails are sent through Resend and include a direct link back to your request on the feedback page.
+
+## Rate limits and rules
+
+- **Daily limit:** Each account can submit at most 10 requests per day.
+- **Sign-in required:** You must be signed in with a confirmed email address to submit a request.
+- **No direct table access:** All writes go through server functions that set the author, sender, and status automatically. Customers cannot write as staff or change a status directly.
+
+## Staff view
+
+CS Harness staff sign in with a staff account on the same feedback page. The staff view lists every request (open or all) and provides:
+
+- A reply box for each request
+- A status menu to move requests along the lifecycle
+- Access to all customer attachments
+
+When a staff member replies to a request that was waiting on the customer, the status automatically returns to **Received**.
+
+## Security and privacy
+
+- The feedback page forms stay hidden until the page's JavaScript runs, so nothing is submitted without client-side validation.
+- Passwords never appear in the address bar or server logs.
+- All text is displayed with `textContent`, never as HTML, to prevent injection.
+- Session tokens are stored in `sessionStorage` for the current browser tab only.
+- Row-level security on the database ensures customers can read only their own requests and messages.
+
+## Implementation status
+
+The feedback system is **live** as of 2026-09-26. The following components are in place:
+
+| Component | Status |
+| --- | --- |
+| Database schema and functions (`support_requests`, `support_messages`) | Live |
+| Row-level security and rate limits | Live |
+| Website feedback page (`csharness.com/pages/feedback`) | Live |
+| Studio Help link with version parameter | Live since Studio 0.3.2 |
+| Screenshot attachments (file picker and paste) | Live |
+| Email notifications (new request, staff reply, status changes) | Live |
+| Account creation, confirmation, and password reset on the page | Live |
+| Staff reply and status management | Live |
+
+The following is **not yet implemented:**
+
+- Staff cannot attach screenshots to replies. Only the customer can add images to their own request.
+
+## Related decisions and documentation
+
+- [Decision 0009: Bug reports and feature requests](/engineering/decisions) (source: `docs/decisions/0009-bug-reports-and-feature-requests.md`)
+- [Studio Help screen](/studio/overview) for in-app guidance
