@@ -123,6 +123,18 @@
     {
       "source": "/code/:slug*",
       "destination": "/"
+    },
+    {
+      "source": "/get-started/account-setup",
+      "destination": "/quickstart"
+    },
+    {
+      "source": "/get-started/key-concepts",
+      "destination": "/architecture"
+    },
+    {
+      "source": "/get-started",
+      "destination": "/quickstart"
     }
   ]
 }
