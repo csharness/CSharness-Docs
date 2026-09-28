@@ -1,0 +1,32 @@
+name: Sync docs to Notion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.mdx'
+      - 'scripts/notion-docs-sync.py'
+      - 'scripts/notion-docs-map.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notion-docs-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate source map
+        run: python scripts/notion-docs-sync.py --dry-run
+      - name: Update Notion mirror
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+        run: python scripts/notion-docs-sync.py
